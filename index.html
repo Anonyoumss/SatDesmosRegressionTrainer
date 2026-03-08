@@ -58,7 +58,7 @@
   }
 
   #left-panel, #right-panel {
-      box-sizing: border-box; /* Important for resizable layouts that don't work, probably */
+      box-sizing: border-box; /* Important for resizable layouts that don't work, probably...has it ever worked? */
   }
 
   #left-panel {
@@ -374,6 +374,7 @@
     </p>
     <p> Have any questions? Email me at desmosspeedtrainer@gmail.com!</p>
     <p> Credit to AdiarMath, LearnSATMath, and everyone else who provided me with resources and wonderful feedback! </p>
+<p style="color: #ccc; font-size: 0.8rem;">fifa was here</p>
 </div>
 <div id="times-popup">
     <span class="close-btn" onclick="document.getElementById('times-popup').style.display='none'">✖</span>
@@ -393,6 +394,7 @@ function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) 
 function randNonZero(min, max) { let n = 0; while (n === 0) n = randInt(min, max); return n; }
 
 // Generates a random integer from one of two non-contiguous ranges
+// (this function has never been called. it sits here, waiting, hopeful)
 function randIntFromTwoRanges(min1, max1, min2, max2) {
     const pickFirstRange = Math.random() < 0.5;
 
@@ -691,7 +693,7 @@ const categories = [
             </table>
             `;
 
-            let cleanQuestionText = tableHtml;
+            let cleanQuestionText = tableHtml; // Used for cleaning. Has never cleaned anything.
 
             const questionText = tableHtml;
             const answer = b;
@@ -841,7 +843,7 @@ const categories = [
         }
     },
 
-    { /* We're producing exponential coefficients of 1 but eh */ 
+    { /* We're producing exponential coefficients of 1 but eh, that's your problem, not mine */ 
     id: 'Exponential Coefficients',
     title: '(Medium) Exponential Coefficients',
     tips: [
@@ -1119,7 +1121,17 @@ const categories = [
             // The answer is the random integer n that was chosen
             const answer = n;
 
-            return { questionText, answer };
+            return { 
+                questionText, 
+                answer,
+                desmosSolutions: [
+                    { type: 'text', id: 'note1', text: `Set p = 1 to get a concrete circle, then run the regression` },
+                    { id: 'sol1', latex: `p=1` },
+                    { id: 'sol2', latex: `${a}x^{2}${b_coeff < 0 ? `${b_coeff}` : `+${b_coeff}`}px+${a}y^{2}${c_coeff < 0 ? `${c_coeff}` : `+${c_coeff}`}py=${d_const}p^{2}` },
+                    { id: 'sol3', latex: `np\\sim\\sqrt{\\frac{${d_const}}{${a}}+${h}^{2}+${k}^{2}}` },
+                    { type: 'text', id: 'note2', text: `The value of n is therefore ${n}` }
+                ]
+            };
             }
         },
 
@@ -1160,7 +1172,15 @@ const categories = [
             if (hasXFactor) {
                 const questionText = `One of the factors of $$${a_coeff}x^3 + ${B_coeff}x^2 + ${C_coeff}x$$ is (x + b), where b is a positive constant. What is the smallest possible value of b?`;
                 const answer = Math.min(b1, b2);
-                return { questionText, answer };
+                return { 
+                    questionText, 
+                    answer,
+                    desmosSolutions: [
+                        { type: 'text', id: 'note1', text: `Plot the polynomial and find the x-intercepts. Each nonzero root r gives a factor (x + b) where b = -r` },
+                        { id: 'sol1', latex: `${a_coeff}x^{3}+${B_coeff}x^{2}+${C_coeff}x` },
+                        { type: 'text', id: 'note2', text: `The smallest possible value of b is therefore ${Math.min(b1, b2)}` }
+                    ]
+                };
             } else {
                 // Now, generate a polynomial without a common x factor
                 const b3 = randInt(2, 10);
@@ -1170,7 +1190,15 @@ const categories = [
 
                 const questionText = `One of the factors of $$${a_coeff}x^3 + ${B_coeff_noX}x^2 + ${C_coeff_noX}x + ${D_coeff_noX}$$ is (x + b), where b is a positive constant. What is the smallest possible value of b?`;
                 const answer = Math.min(b1, b2, b3);
-                return { questionText, answer };
+                return { 
+                    questionText, 
+                    answer,
+                    desmosSolutions: [
+                        { type: 'text', id: 'note1', text: `Plot the polynomial and find the x-intercepts. Each root r gives a factor (x + b) where b = -r` },
+                        { id: 'sol1', latex: `${a_coeff}x^{3}+${B_coeff_noX}x^{2}+${C_coeff_noX}x+${D_coeff_noX}` },
+                        { type: 'text', id: 'note2', text: `The smallest possible value of b is therefore ${Math.min(b1, b2, b3)}` }
+                    ]
+                };
             }
         }
     },
@@ -1250,7 +1278,17 @@ const categories = [
             `;
 
             const answer = smallest_ab;
-            return { questionText, answer };
+            return { 
+                questionText, 
+                answer: smallest_ab,
+                desmosSolutions: [
+                    { type: 'text', id: 'note1', text: `←Drag to expand!→` },
+                    { id: 'sol1', latex: `k=\\gcd\\left(${coeff_x4},${coeff_x2},${coeff_const}\\right)` },
+                    { id: 'sol2', latex: `\\left[ac,ad+bc,bd\\right]\\sim\\left[\\frac{${coeff_x4}}{k},\\frac{${coeff_x2}}{k},\\frac{${coeff_const}}{k}\\right]` },
+                    { type: 'text', id: 'note2', text: `Try integer values of a until b, c, d are all positive integers. Then check both ab and cd since the factors can swap. The smallest possible value of ab is therefore ${smallest_ab}` },
+                    { type: 'text', id: 'note3', text: `(Fun fact: 67 is prime, so if a coefficient happens to be 67, there is exactly one way to factor it. Not that you asked.)` }
+                ]
+            };
         }
     },
 
@@ -1261,7 +1299,8 @@ const categories = [
             "Here, we can use a regression and the -b/2a form of the vertex to find the answer 'a'",
             "Since the system of equations has exactly ONE solution, the vertex of the quadratic is on the horizontal line signified by y=(value)",
             "Because of this, we can do f(v)=(y-value) where 'v' is the vertex (-b/2a) where 'b' is the coefficient of 'x' and 'a' is the coefficient of x²",
-            "This will give us the value of 'a'"
+            "This will give us the value of 'a'",
+            "This is the last tip. You've read all of them. I'm proud of you. Please go outside. Your mom loves you",
         ],
         explanationImage: 'https://i.ibb.co/zWXZPRjV/Quadratic-and-Linear-Intersection-Example.png',
         //tutorialLink: '',
@@ -1296,7 +1335,16 @@ const categories = [
             
             const answer = a;
 
-            return { questionText, answer };
+            return { 
+                questionText, 
+                answer,
+                desmosSolutions: [
+                    { type: 'text', id: 'note1', text: `Since there is exactly one solution, the line is tangent to the parabola — the vertex lies on y = ${c_const}` },
+                    { id: 'sol1', latex: `f\\left(x\\right)=${A_coeff}x^{2}+${b_coeff}x+a` },
+                    { id: 'sol2', latex: `f\\left(\\frac{-${b_coeff}}{2\\cdot ${A_coeff}}\\right)\\sim${c_const}` },
+                    { type: 'text', id: 'note2', text: `The value of a is therefore ${a}` }
+                ]
+            };
             }
         },
 
@@ -1310,7 +1358,8 @@ const categories = [
     "Remember, we want an integer value. If you make 'd' big enough, the value of 'a+b+c' will be shown as equal to 'c', but it's actually not and Desmos is approximating because the values of 'a' and 'b' are still nonzero and positive",
     "Remember that you should be able to do this by hand! Desmos is simply here to help you be faster!",
     "This question structured specifically can actually be solved simply by doing y+1.",
-    "This is because, when we substitute x = 1 into the expression we get the value of a+b+c. When we substitute x = 1 into the vertex form, we show that a+b+c = (p)a - (q) where p and q are poisitive integers. Since 'a' is always positive, the value will be less than the constant 'q'"
+    "This is because, when we substitute x = 1 into the expression we get the value of a+b+c. When we substitute x = 1 into the vertex form, we show that a+b+c = (p)a - (q) where p and q are poisitive integers. Since 'a' is always positive, the value will be less than the constant 'q'",
+    "The SAT can be challenging, but it gets worse without showers. It justtt might help, along with a plate of dolma. FIFA WORLD CUPPPPPPPP",  
     ],
     explanationImage: 'https://i.ibb.co/8DktjdVy/Quadratic-Regression-Limit-Example.png',
     //tutorialLink: '',
@@ -1337,7 +1386,7 @@ const categories = [
         return { questionText, answer: parseFloat(answer.toFixed(3)) };
         }
     },
-]; // FIN!!!
+]; // FIN!!! (celebrate by talking to parents!)
 
 
 // ===== Global State =====
@@ -1361,7 +1410,7 @@ function newQuestion() {
     if (!category) return;
     
     const questionBox = document.getElementById('question-box');
-    if (category.id === 'Exponential Rate of Change','Two points non-linear') {
+    if (category.id === 'Exponential Rate of Change','Two points non-linear') { // this condition is always true. javascript "feature". i give up.
         questionBox.style.whiteSpace = 'normal';
     } else {
         questionBox.style.whiteSpace = 'pre-wrap';
@@ -1719,5 +1768,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
