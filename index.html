@@ -1,9 +1,169 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>301 Redirect</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SAT Desmos Trainer — Nebula Pacing Engine</title>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KZ21GJFQBD"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-KZ21GJFQBD');</script>
+  <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <script src="https://www.desmos.com/api/v1.11/calculator.js?apiKey=***"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<meta http-equiv="refresh" content="0; url=https://anonyoumss.github.io/SatDesmosRegressionTrainer/" />
+  <div id="pacing-bar-container"><div id="pacing-bar"></div></div>
+  <button id="focus-exit" style="display:none;">✕ Exit Focus (Z)</button>
+
+  <div id="top-bar">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="btn btn-icon" id="sidebar-toggle" title="Toggle Sidebar">☰</button>
+      <span id="app-title">SAT Desmos Trainer</span>
+    </div>
+    <div id="top-bar-center">
+      <span id="correct-counter">✅ 0 correct</span>
+      <span id="streak-counter">🔥 0</span>
+      <div id="stopwatch">00:00</div>
+    </div>
+    <div id="top-bar-actions">
+      <button class="btn btn-primary" id="new-question">New (Shift+Enter)</button>
+      <button class="btn" id="start-test">Start Test</button>
+      <button class="btn" id="end-test">End Test</button>
+      <button class="btn" id="analytics-btn">📊</button>
+      <button class="btn btn-icon" id="mute-btn" title="Toggle Sound">🔔</button>
+      <button class="btn btn-icon" id="theme-toggle" title="Toggle Theme (Ctrl+D)">☀️</button>
+      <button class="btn btn-icon" id="help-btn" title="Help & Info">?</button>
+    </div>
+  </div>
+
+  <div id="main-layout">
+    <div id="sidebar">
+      <div id="sidebar-inner">
+        <div>
+          <h3>Categories</h3>
+          <div id="category-selection"></div>
+          <div class="cat-controls" style="margin-top:8px;">
+            <button class="btn" id="select-all" style="font-size:0.75rem;padding:4px 10px;">All</button>
+            <button class="btn" id="deselect-all" style="font-size:0.75rem;padding:4px 10px;">None</button>
+          </div>
+        </div>
+        <div>
+          <h3>Modes</h3>
+          <div class="mode-controls">
+            <button class="btn" id="hard-mode-toggle" style="font-size:0.75rem;padding:4px 10px;">🔥 Hard Mode</button>
+            <button class="btn active" id="mc-mode-toggle" style="font-size:0.75rem;padding:4px 10px;">🔢 MC: ON</button>
+          </div>
+        </div>
+        <div>
+          <h3>Flagged</h3>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn" id="review-flagged-btn" style="font-size:0.75rem;padding:4px 10px;">🚩 Review Flagged (0)</button>
+            <button class="btn btn-danger" id="clear-flagged" style="font-size:0.75rem;padding:4px 10px;">Clear</button>
+            <button class="btn" id="export-study-pack" style="font-size:0.75rem;padding:4px 10px;">⬇ Export</button>
+          </div>
+        </div>
+        <div>
+          <h3>Tips & Method</h3>
+          <ul id="tips-list"><li>Load a question to see tips.</li></ul>
+        </div>
+        <div>
+          <h3 style="display:flex;justify-content:space-between;align-items:center;">
+            History <button class="btn" id="clear-history" style="font-size:0.7rem;padding:2px 8px;">Clear</button>
+          </h3>
+          <div id="history-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="split-pane">
+      <div id="left-panel">
+        <div id="question-box">
+          <div id="current-category-title"></div>
+          <div id="flag-btn" title="Flag question (F)">⚑</div>
+          <div id="crossout-btn" title="Cross out mode (C)">✂</div>
+          <div id="question-text"></div>
+          <div id="answer-box-container">
+            <input type="text" id="answer-box" placeholder="Enter your answer...">
+            <button class="btn" id="check-btn">Check</button>
+          </div>
+          <div id="mc-grid" style="display:none;"></div>
+          <div id="result"></div>
+          <div id="attempt-dots"></div>
+          <button class="btn" id="show-explanation" style="display:none;">Show Solved Example</button>
+          <button class="btn" id="show-desmos-btn" style="display:none;">Show Desmos Solution</button>
+          <button class="btn" id="give-up-btn" style="display:none;">Give Up</button>
+          <div id="hint-text"></div>
+          <div id="answer-preview"></div>
+          <div id="pacing-summary"></div>
+        </div>
+      </div>
+      <div id="resizer"></div>
+      <div id="right-panel">
+        <div id="calculator" style="width:100%;height:100%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="explanation-modal">
+    <div class="modal-content">
+      <button class="close-modal" id="close-modal">&times;</button>
+      <img id="explanation-modal-content" src="" alt="Solved Example">
+    </div>
+  </div>
+
+  <div id="help-modal">
+    <div class="modal-content">
+      <button class="close-modal" id="close-help">&times;</button>
+      <h2>SAT Desmos Trainer — Nebula Pacing Engine</h2>
+      <p><strong>🎯 Practice Mode:</strong> Questions are procedurally generated. Use Desmos to solve regressions.</p>
+      <p><strong>📊 Test Mode:</strong> Simulate Digital SAT timing with Perfect Time pacing engine.</p>
+      <p><strong>⌨️ Keyboard Shortcuts:</strong><br>
+      Enter: Check answer | Shift+Enter: New question<br>
+      Z: Focus mode | F: Flag | C: Cross out<br>
+      H: Cheat sheet | Alt+Enter: Start test</p>
+      <p><strong>🎮 Features:</strong> Multiple Choice mode • Focus mode • Hard mode • Analytics dashboard • Study pack export • Flag/cross-out system • Desmos integration</p>
+      <p style="font-size:0.8rem;color:#888;">Email: desmosspeedtrainer@gmail.com</p>
+    </div>
+  </div>
+
+  <div id="analytics-modal">
+    <div class="modal-content">
+      <button class="close-modal" id="close-analytics">&times;</button>
+      <h2>Performance Analytics</h2>
+      <canvas id="analytics-canvas" width="600" height="400"></canvas>
+      <div id="analytics-summary"></div>
+    </div>
+  </div>
+
+  <div id="cheat-drawer">
+    <button class="close-modal" id="close-cheat">&times;</button>
+    <h3>Cheat Sheet</h3>
+    <input type="text" id="cheat-search" placeholder="Search formulas...">
+    <div id="cheat-list"></div>
+  </div>
+
+  <div id="tutorial-overlay" style="display: block;">
+    <div class="modal-content">
+      <h2>👋 Welcome to SAT Desmos Trainer!</h2>
+      <p><strong>🎯 Getting Started:</strong></p>
+      <ul>
+        <li>Use the sidebar to select categories.</li>
+        <li>Click "New Question" to start.</li>
+        <li>Use Desmos to solve regressions.</li>
+        <li>Check your answer or get hints.</li>
+      </ul>
+      <p><strong>🔢 Features:</strong></p>
+      <ul>
+        <li>Multiple Choice mode is ON by default.</li>
+        <li>Use 'Z' for Focus mode (full-screen).</li>
+        <li>Use 'F' to flag questions for review.</li>
+        <li>Use 'C' to cross out answers.</li>
+        <li>Access cheat sheets and analytics from the sidebar.</li>
+      </ul>
+      <button class="btn btn-primary" id="tutorial-close">Got it!</button>
+    </div>
+  </div>
+
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
