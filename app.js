@@ -26,6 +26,8 @@ const state = {
     testSessionHistory: [], giveUpCount: 0,
     darkMode: true, muted: false, crossOutMode: false,
     resizerPct: 48, flaggedQuestions: [], reviewingFlagged: false,
+    hardMode: false, focusMode: false,
+    streak: 0, mcMode: true, mcChoices: [],
 };
 
 // ===== Web Audio =====
@@ -50,15 +52,19 @@ function loadStorage() {
         if (typeof data.muted === 'boolean') state.muted = data.muted;
         if (typeof data.resizerPct === 'number') state.resizerPct = data.resizerPct;
         if (Array.isArray(data.flaggedQuestions)) state.flaggedQuestions = data.flaggedQuestions;
-        return Object.keys(data).length > 0; // true = returning user
+        if (typeof data.hardMode === 'boolean') state.hardMode = data.hardMode;
+        if (typeof data.focusMode === 'boolean') state.focusMode = data.focusMode;
+        if (typeof data.mcMode === 'boolean') state.mcMode = data.mcMode;
+        return Object.keys(data).length > 0;
     } catch(e) { return false; }
 }
 function saveStorage() {
     const checked = [...document.querySelectorAll('#category-selection input:checked')].map(cb => cb.value);
     localStorage.setItem('desmosTrainer', JSON.stringify({
         selectedCategories: checked, history: state.sessionStats.history.slice(-50),
-        darkMode: state.darkMode, muted: state.muted,
-        resizerPct: state.resizerPct, flaggedQuestions: state.flaggedQuestions.slice(-50),
+        darkMode: state.darkMode, muted: state.muted, resizerPct: state.resizerPct,
+        flaggedQuestions: state.flaggedQuestions.slice(-50),
+        hardMode: state.hardMode, focusMode: state.focusMode, mcMode: state.mcMode,
     }));
 }
 
@@ -73,13 +79,42 @@ function toggleDarkMode() { state.darkMode = !state.darkMode; applyTheme(); save
 function applyMute() { document.getElementById('mute-btn').textContent = state.muted ? '🔇' : '🔔'; }
 function toggleMute() { state.muted = !state.muted; applyMute(); saveStorage(); }
 
+// ===== Focus Mode =====
+function applyFocusMode() {
+    document.body.classList.toggle('focus-mode', state.focusMode);
+    const btn = document.getElementById('focus-exit');
+    if (btn) btn.style.display = state.focusMode ? 'flex' : 'none';
+}
+function toggleFocusMode() { state.focusMode = !state.focusMode; applyFocusMode(); saveStorage(); }
+
+// ===== Hard Mode =====
+function applyHardMode() {
+    const btn = document.getElementById('hard-mode-toggle');
+    if (btn) { btn.classList.toggle('active', state.hardMode); btn.textContent = state.hardMode ? '🔥 Hard ON' : '🔥 Hard Mode'; }
+    const cheatBtn = document.getElementById('cheat-btn');
+    if (cheatBtn) cheatBtn.disabled = state.hardMode;
+    if (state.hardMode && document.getElementById('cheat-drawer').classList.contains('open')) showCheatSheet(false);
+}
+function toggleHardMode() { state.hardMode = !state.hardMode; applyHardMode(); saveStorage(); }
+
+// ===== Streak =====
+function updateStreak(increment) {
+    if (increment) { state.streak++; } else { state.streak = 0; }
+    const el = document.getElementById('streak-counter');
+    if (!el) return;
+    el.textContent = `🔥 ${state.streak}`;
+    el.style.opacity = state.streak > 0 ? '1' : '0.4';
+    el.style.textShadow = state.streak >= 5 ? '0 0 10px var(--accent-cyan)' : state.streak >= 3 ? '0 0 6px var(--accent-cyan)' : 'none';
+    el.classList.toggle('streak-hot', state.streak >= 3);
+}
+
 // ===== Stopwatch =====
 function startStopwatch() {
     state.stopwatch.elapsed = 0; updateStopwatchDisplay();
     if (state.stopwatch.interval) clearInterval(state.stopwatch.interval);
     state.stopwatch.interval = setInterval(() => { state.stopwatch.elapsed++; updateStopwatchDisplay(); }, 1000);
 }
-function stopStopwatch() { clearInterval(state.stopwatch.interval); state.stopwatch.interval = null; }
+function stopStopwatch() { if (state.stopwatch.interval) { clearInterval(state.stopwatch.interval); state.stopwatch.interval = null; } }
 function updateStopwatchDisplay() {
     const s = state.stopwatch.elapsed;
     document.getElementById('stopwatch').textContent = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
@@ -92,7 +127,7 @@ function startPacingBar() {
     state.pacing.interval = setInterval(updatePacingBar, 500);
     updatePacingBar();
 }
-function stopPacingBar() { clearInterval(state.pacing.interval); state.pacing.interval = null; }
+function stopPacingBar() { if (state.pacing.interval) { clearInterval(state.pacing.interval); state.pacing.interval = null; } }
 function updatePacingBar() {
     if (!state.pacing.questionStart) return;
     const elapsed = (Date.now() - state.pacing.questionStart) / 1000;
@@ -108,7 +143,124 @@ function showPacingSummary(t) {
     el.textContent = diff >= 0 ? `⏱ ${t}s (Perfect: ${state.currentQuestion.perfectTime}s) — Saved ${diff}s!` : `⏱ ${t}s (Perfect: ${state.currentQuestion.perfectTime}s) — ${Math.abs(diff)}s over.`;
 }
 
-// ===== Click-to-Copy: wrap standalone numbers outside LaTeX =====
+// ===== Smart Distractors =====
+function generateDistractors(answer) {
+    const val = parseValue(answer);
+    const str = String(answer).trim();
+    const isFrac = str.includes('/');
+    const isInt = !isFrac && Number.isInteger(val);
+    const decPlaces = (!isFrac && !isInt) ? Math.max(1, (str.split('.')[1] || '').length) : 0;
+
+    const fmt = (n) => {
+        if (isFrac) {
+            const denom = parseInt(str.split('/')[1]) || 1;
+            return `${Math.round(n * denom)}/${denom}`;
+        }
+        if (isInt) return String(Math.round(n));
+        return n.toFixed(decPlaces);
+    };
+
+    const step = isInt ? 1 : Math.pow(10, -decPlaces);
+    const deltas = [1, -1, 2, -2, 3, -3, 4, -4, 5, -5];
+    const seen = new Set([fmt(val)]);
+    const distractors = [];
+    for (const d of deltas) {
+        if (distractors.length >= 3) break;
+        const cand = fmt(val + d * step);
+        if (!seen.has(cand)) { seen.add(cand); distractors.push(cand); }
+    }
+
+    const choices = [str, ...distractors];
+    for (let i = choices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [choices[i], choices[j]] = [choices[j], choices[i]];
+    }
+    return choices;
+}
+
+// ===== Multiple Choice UI =====
+const MC_LABELS = ['A', 'B', 'C', 'D'];
+function renderMCChoices(choices) {
+    state.mcChoices = choices;
+    const grid = document.getElementById('mc-grid');
+    const answerRow = document.getElementById('answer-row');
+    const preview = document.getElementById('answer-preview');
+    grid.innerHTML = '';
+    if (state.mcMode) {
+        answerRow.style.display = 'none';
+        preview.style.display = 'none';
+        grid.style.display = 'grid';
+        choices.forEach((choice, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'mc-btn';
+            btn.dataset.value = choice;
+            btn.dataset.index = i;
+            btn.innerHTML = `<span class="mc-label">${MC_LABELS[i]}</span><span class="mc-val">\\(${choice}\\)</span>`;
+            btn.addEventListener('click', () => handleMCAnswer(choice, btn));
+            grid.appendChild(btn);
+        });
+        MathJax.typeset([grid]);
+    } else {
+        answerRow.style.display = 'flex';
+        preview.style.display = '';
+        grid.style.display = 'none';
+        document.getElementById('answer-box').focus();
+    }
+}
+
+function handleMCAnswer(choice, btnEl) {
+    if (state.currentQuestion.answer === null) return;
+    const cv = parseValue(state.currentQuestion.answer);
+    const uv = parseValue(choice);
+    const isCorrect = Math.abs(uv - cv) < 1e-9;
+
+    if (isCorrect) {
+        btnEl.classList.add('mc-correct');
+        document.querySelectorAll('.mc-btn').forEach(b => b.disabled = true);
+        const t = Math.round((Date.now() - state.currentQuestion.startTime) / 1000);
+        stopPacingBar(); document.getElementById('pacing-bar').style.width = '100%';
+        setResult('✅ Correct!', true); playSound('correct');
+        updateStreak(true);
+        state.sessionStats.totalCorrect++;
+        document.getElementById('correct-counter').textContent = `✅ ${state.sessionStats.totalCorrect} correct`;
+        addToHistory(state.currentQuestion.id, state.currentQuestion.category.title, t, state.currentQuestion.tries + 1, state.currentQuestion.perfectTime);
+        showPacingSummary(t); state.currentQuestion.answer = null;
+        // trigger next if test mode
+        if (state.testMode) {
+            state.currentQuestionNum++;
+            setTimeout(() => { state.currentQuestionNum >= state.testCount ? endTest(true) : newQuestion(); }, 800);
+        }
+    } else {
+        btnEl.classList.add('mc-wrong');
+        btnEl.disabled = true;
+        state.currentQuestion.tries++;
+        renderAttemptDots();
+        updateStreak(false);
+        if (state.currentQuestion.tries === 1) { setResult('❌ Incorrect. Try again!', false); document.getElementById('give-up-btn').style.display = 'inline-block'; }
+        else if (state.currentQuestion.tries === 2) { setResult('❌ Still incorrect. One more try.', false); const ht2 = document.getElementById('hint-text'); ht2.textContent = 'Check the sidebar tips for a hint.'; ht2.style.display = 'block'; }
+        else {
+            playSound('wrong');
+            // reveal correct
+            document.querySelectorAll('.mc-btn').forEach(b => {
+                b.disabled = true;
+                if (Math.abs(parseValue(b.dataset.value) - cv) < 1e-9) b.classList.add('mc-correct');
+            });
+            if (!state.hardMode) document.getElementById('show-desmos-btn').style.display = 'inline-block';
+            document.getElementById('give-up-btn').style.display = 'none';
+            setResult(`❌ Answer: ${state.currentQuestion.answer}`, false);
+            state.currentQuestion.answer = null;
+        }
+    }
+}
+
+// ===== MC Mode Toggle =====
+function applyMCMode() {
+    const toggle = document.getElementById('mc-mode-toggle');
+    if (toggle) { toggle.classList.toggle('active', state.mcMode); toggle.textContent = state.mcMode ? '🔢 MC: ON' : '🔢 MC: OFF'; }
+}
+function toggleMCMode() { state.mcMode = !state.mcMode; applyMCMode(); saveStorage(); newQuestion(); }
+
+// ===== Click-to-Copy =====
 function wrapCopyableNumbers(html) {
     const parts = html.split(/(\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\))/g);
     return parts.map((part, i) => {
@@ -120,10 +272,11 @@ function wrapCopyableNumbers(html) {
 
 // ===== History =====
 function addToHistory(catId, catTitle, timeTaken, tries, perfectTime) {
-    const entry = { catId, categoryTitle: catTitle, timeTaken, tries, perfectTime, fast: timeTaken <= perfectTime };
+    const trophy = state.hardMode ? ' 🏆' : '';
+    const entry = { catId, categoryTitle: catTitle + trophy, timeTaken, tries, perfectTime, fast: timeTaken <= perfectTime };
     state.sessionStats.history.unshift(entry);
     if (state.sessionStats.history.length > 50) state.sessionStats.history.pop();
-    if (state.testMode) state.testSessionHistory.push(entry);
+    if (state.testMode) state.testSessionHistory.push({ catId, categoryTitle: catTitle, timeTaken, tries, perfectTime, fast: timeTaken <= perfectTime });
     renderHistory(); saveStorage();
 }
 function renderHistory() {
@@ -142,7 +295,7 @@ function renderAttemptDots() {
         `<div class="attempt-dot${i < state.currentQuestion.tries ? ' used' : ''}"></div>`).join('');
 }
 
-// ===== Cross-out Mode =====
+// ===== Cross-out =====
 function toggleCrossOut() {
     state.crossOutMode = !state.crossOutMode;
     document.getElementById('crossout-btn').classList.toggle('active', state.crossOutMode);
@@ -190,17 +343,16 @@ function exportStudyPack() {
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SAT Study Pack</title>
     <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>
     <style>body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#222}
-    h1{color:#0969da;margin-bottom:4px}p.sub{color:#666;font-size:0.85rem;margin-bottom:32px}
+    h1{color:#7c4dff;margin-bottom:4px}p.sub{color:#666;font-size:0.85rem;margin-bottom:32px}
     .q-block{border:1px solid #ddd;border-radius:8px;padding:16px 20px;margin-bottom:20px;page-break-inside:avoid}
-    .q-num{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;color:#0969da;font-weight:700;margin-bottom:8px}
+    .q-num{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;color:#7c4dff;font-weight:700;margin-bottom:8px}
     .q-text{font-size:1.05rem;line-height:1.6;white-space:pre-wrap;margin-bottom:10px}
     .q-tips{font-size:0.85rem;color:#555}ul{margin:4px 0 0 16px}li{margin-bottom:3px}
     @media print{body{margin:20px}}</style></head><body>
     <h1>SAT Desmos Study Pack</h1><p class="sub">Exported ${new Date().toLocaleDateString()} • ${state.flaggedQuestions.length} flagged question(s)</p>
     ${rows}</body></html>`;
     const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
+    win.document.write(html); win.document.close();
 }
 
 // ===== Category Checkboxes =====
@@ -234,13 +386,17 @@ function newQuestion(fromFlagged = false) {
         questionText = gen.questionText; answer = gen.answer;
     }
 
+    // Hard mode: reduce perfect time by 20%
+    const effectivePerfectTime = state.hardMode ? Math.round((category.perfectTime || 90) * 0.8) : (category.perfectTime || 90);
+
     calculator.setBlank();
     state.crossOutMode = false;
     document.getElementById('crossout-btn').classList.remove('active');
     document.getElementById('question-box').classList.remove('crossout-mode');
-    state.currentQuestion = { id: category.id, startTime: Date.now(), tries: 0, perfectTime: category.perfectTime || 90, answer, category, flagged: false, rawText: questionText };
 
-    document.getElementById('current-category-title').textContent = category.title;
+    state.currentQuestion = { id: category.id, startTime: Date.now(), tries: 0, perfectTime: effectivePerfectTime, answer, category, flagged: false, rawText: questionText };
+
+    document.getElementById('current-category-title').textContent = category.title + (state.hardMode ? ' 🔥' : '');
     document.getElementById('flag-btn').textContent = '⚑';
     document.getElementById('flag-btn').classList.remove('flagged');
 
@@ -252,18 +408,27 @@ function newQuestion(fromFlagged = false) {
         span.addEventListener('click', e => { e.stopPropagation(); navigator.clipboard.writeText(span.textContent).catch(() => {}); showCopyTooltip(span); });
     });
 
-    ['answer-box','result','hint-text','pacing-summary','give-up-btn','show-desmos-btn','answer-preview'].forEach(id => {
-        const el = document.getElementById(id); if (!el) return;
-        if (id === 'answer-box') { el.value = ''; el.className = ''; }
-        else if (id === 'result') { el.textContent = ''; el.className = ''; }
-        else if (['hint-text','give-up-btn','show-desmos-btn','pacing-summary'].includes(id)) el.style.display = 'none';
-        else if (id === 'answer-preview') { el.innerHTML = ''; el.className = 'answer-preview'; }
-    });
+    // Full state reset
+    const answerBox = document.getElementById('answer-box');
+    answerBox.value = ''; answerBox.className = '';
+    const result = document.getElementById('result'); result.textContent = ''; result.className = '';
+    const hint = document.getElementById('hint-text'); hint.style.display = 'none'; hint.textContent = '';
+    document.getElementById('pacing-summary').style.display = 'none';
+    document.getElementById('give-up-btn').style.display = 'none';
+    document.getElementById('show-desmos-btn').style.display = 'none';
+    const prev = document.getElementById('answer-preview'); prev.innerHTML = ''; prev.className = 'answer-preview';
+    document.getElementById('attempt-dots').innerHTML = '';
 
     document.getElementById('tips-list').innerHTML = category.tips.map(t => `<li>${t}</li>`).join('');
     document.getElementById('show-explanation').dataset.imageSrc = category.explanationImage || '';
-    renderAttemptDots(); startPacingBar();
-    document.getElementById('answer-box').focus(); saveStorage();
+    // Hard mode: hide solution button
+    document.getElementById('show-explanation').style.display = state.hardMode ? 'none' : '';
+
+    renderAttemptDots();
+    renderMCChoices(generateDistractors(answer));
+    startPacingBar();
+    if (!state.mcMode) answerBox.focus();
+    saveStorage();
 }
 
 function showCopyTooltip(el) {
@@ -272,7 +437,7 @@ function showCopyTooltip(el) {
     el.appendChild(tip); setTimeout(() => tip.remove(), 1200);
 }
 
-// ===== Answer Checking =====
+// ===== Answer Checking (text mode) =====
 function parseValue(str) {
     if (typeof str === 'number') return str;
     const s = String(str).trim();
@@ -291,6 +456,7 @@ function handleCheckAnswer() {
         const t = Math.round((Date.now() - state.currentQuestion.startTime) / 1000);
         stopPacingBar(); document.getElementById('pacing-bar').style.width = '100%';
         box.classList.add('correct'); setResult('✅ Correct!', true); playSound('correct');
+        updateStreak(true);
         state.sessionStats.totalCorrect++;
         document.getElementById('correct-counter').textContent = `✅ ${state.sessionStats.totalCorrect} correct`;
         addToHistory(state.currentQuestion.id, state.currentQuestion.category.title, t, state.currentQuestion.tries + 1, state.currentQuestion.perfectTime);
@@ -298,19 +464,26 @@ function handleCheckAnswer() {
         return true;
     } else {
         state.currentQuestion.tries++;
-        box.classList.remove('correct'); box.classList.add('incorrect'); renderAttemptDots();
+        box.classList.remove('correct'); box.classList.add('incorrect');
+        renderAttemptDots(); updateStreak(false);
         if (state.currentQuestion.tries === 1) { setResult('❌ Incorrect. Try again!', false); document.getElementById('give-up-btn').style.display = 'inline-block'; }
         else if (state.currentQuestion.tries === 2) { setResult('❌ Still incorrect.', false); document.getElementById('hint-text').style.display = 'block'; }
-        else { playSound('wrong'); setResult(`❌ Answer: ${state.currentQuestion.answer}`, false); document.getElementById('show-desmos-btn').style.display = 'inline-block'; document.getElementById('give-up-btn').style.display = 'none'; state.currentQuestion.answer = null; }
+        else {
+            playSound('wrong');
+            setResult(`❌ Answer: ${state.currentQuestion.answer}`, false);
+            if (!state.hardMode) document.getElementById('show-desmos-btn').style.display = 'inline-block';
+            document.getElementById('give-up-btn').style.display = 'none';
+            state.currentQuestion.answer = null;
+        }
         box.focus(); return false;
     }
 }
 function setResult(msg, ok) { const el = document.getElementById('result'); el.textContent = msg; el.className = ok ? 'correct' : 'incorrect'; }
 
 function giveUp() {
-    stopPacingBar(); state.giveUpCount++;
+    stopPacingBar(); state.giveUpCount++; updateStreak(false);
     setResult(`Answer: ${state.currentQuestion.answer}`, false);
-    document.getElementById('show-desmos-btn').style.display = 'inline-block';
+    if (!state.hardMode) document.getElementById('show-desmos-btn').style.display = 'inline-block';
     document.getElementById('give-up-btn').style.display = 'none';
     const ht = document.getElementById('hint-text'); ht.style.display = 'block'; ht.textContent = 'Check "Show Solved Example" for the method.';
     state.currentQuestion.answer = null;
@@ -324,31 +497,32 @@ function updateAnswerPreview(val) {
     if (!val.trim()) { prev.innerHTML = ''; return; }
     previewTimer = setTimeout(() => {
         try { prev.innerHTML = `\\(${val}\\)`; prev.className = 'answer-preview'; MathJax.typeset([prev]); }
-        catch(e) { prev.innerHTML = '<span style="color:var(--orange);font-size:0.78rem">Invalid syntax</span>'; prev.className = 'answer-preview invalid'; }
-    }, 200);
+        catch(e) { prev.innerHTML = '<span style="color:var(--neon-red);font-size:0.78rem">Invalid syntax</span>'; prev.className = 'answer-preview invalid'; }
+    }, 250);
 }
 
-// ===== Analytics Modal =====
+// ===== Analytics =====
 function getMasteryLabel(acc, ratio) {
-    if (acc >= 0.85 && ratio <= 1.1) return { label: 'Master', color: '#3fb950' };
-    if (acc >= 0.7 && ratio <= 1.3) return { label: 'Pro', color: '#58a6ff' };
-    if (acc >= 0.5) return { label: 'Intermediate', color: '#d29922' };
-    return { label: 'Beginner', color: '#f85149' };
+    if (acc >= 0.85 && ratio <= 1.1) return { label: 'Master', color: 'var(--accent-cyan)' };
+    if (acc >= 0.7 && ratio <= 1.3) return { label: 'Pro', color: 'var(--accent-violet)' };
+    if (acc >= 0.5) return { label: 'Intermediate', color: 'var(--orange)' };
+    return { label: 'Beginner', color: 'var(--neon-red)' };
 }
 function heatColor(acc, ratio) {
     if (acc === undefined) return 'var(--surface2)';
-    if (acc >= 0.8 && ratio <= 1.1) return 'rgba(63,185,80,0.35)';
-    if (acc >= 0.6 && ratio <= 1.4) return 'rgba(88,166,255,0.25)';
-    if (acc >= 0.4) return 'rgba(210,153,34,0.35)';
-    return 'rgba(248,81,73,0.35)';
+    if (acc >= 0.8 && ratio <= 1.1) return 'rgba(0,229,255,0.15)';
+    if (acc >= 0.6 && ratio <= 1.4) return 'rgba(124,77,255,0.15)';
+    if (acc >= 0.4) return 'rgba(255,109,0,0.15)';
+    return 'rgba(255,23,68,0.15)';
 }
 function openAnalytics() {
     const grid = document.getElementById('analytics-grid');
     const h = state.sessionStats.history;
     const stats = {};
     h.forEach(item => {
-        if (!stats[item.catId]) stats[item.catId] = { title: item.categoryTitle, correct: 0, total: 0, timeSum: 0, perfSum: 0 };
-        const s = stats[item.catId]; s.total++; s.timeSum += item.timeTaken; s.perfSum += item.perfectTime;
+        const id = item.catId || item.categoryTitle;
+        if (!stats[id]) stats[id] = { title: item.categoryTitle.replace(' 🏆',''), correct: 0, total: 0, timeSum: 0, perfSum: 0 };
+        const s = stats[id]; s.total++; s.timeSum += item.timeTaken; s.perfSum += item.perfectTime;
         if (item.tries === 1 || item.timeTaken <= item.perfectTime) s.correct++;
     });
     if (!Object.keys(stats).length) { grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1">Solve some questions first!</p>'; }
@@ -381,11 +555,9 @@ function renderCheatSheet(filter = '') {
         </div>`).join('');
     MathJax.typeset([container]);
 }
-function injectFormula(latex) {
-    calculator.setExpression({ id: String(Date.now()), latex });
-    showCheatSheet(false);
-}
+function injectFormula(latex) { calculator.setExpression({ id: String(Date.now()), latex }); showCheatSheet(false); }
 function showCheatSheet(open = true) {
+    if (open && state.hardMode) return;
     const drawer = document.getElementById('cheat-drawer');
     drawer.classList.toggle('open', open);
     if (open) { document.getElementById('cheat-search').value = ''; renderCheatSheet(); document.getElementById('cheat-search').focus(); }
@@ -394,18 +566,15 @@ function showCheatSheet(open = true) {
 // ===== Test Report Card =====
 function calcTestGrade(answered, correct, totalTime, totalPerfect, giveUps) {
     const acc = answered ? correct / answered : 0;
-    const underPace = totalTime < totalPerfect;
-    if (acc === 1 && underPace) return { grade: 'A', color: '#3fb950', label: 'Excellent!' };
-    if (acc === 1) return { grade: 'B', color: '#58a6ff', label: 'All correct, but a bit slow.' };
-    if (acc >= 0.8) return { grade: 'C', color: '#d29922', label: 'Good, but review your mistakes.' };
-    if (acc >= 0.7 && giveUps < 2) return { grade: 'D', color: '#f85149', label: 'Needs improvement.' };
-    return { grade: 'F', color: '#f85149', label: 'Keep practicing — you\'ll get there!' };
+    if (acc === 1 && totalTime < totalPerfect) return { grade: 'A', color: 'var(--accent-cyan)', label: 'Perfect — Fast & Accurate!' };
+    if (acc === 1) return { grade: 'B', color: 'var(--accent-violet)', label: 'All correct, but a bit slow.' };
+    if (acc >= 0.8) return { grade: 'C', color: 'var(--orange)', label: 'Good — review your mistakes.' };
+    if (acc >= 0.7 && giveUps < 2) return { grade: 'D', color: 'var(--neon-red)', label: 'Needs improvement.' };
+    return { grade: 'F', color: 'var(--neon-red)', label: "Keep practicing — you'll get there!" };
 }
 function showReportCard(answered, correct, totalTime, totalPerfect) {
     const giveUps = state.giveUpCount;
     const { grade, color, label } = calcTestGrade(answered, correct, totalTime, totalPerfect, giveUps);
-
-    // Category analysis
     const catStats = {};
     state.testSessionHistory.forEach(item => {
         if (!catStats[item.catId]) catStats[item.catId] = { title: item.categoryTitle, timeSum: 0, total: 0, correct: 0, perfSum: 0 };
@@ -419,10 +588,7 @@ function showReportCard(answered, correct, totalTime, totalPerfect) {
         if (!weakest || ratio > weakest.ratio) weakest = { ...s, ratio };
         if (!strongest || ratio < strongest.ratio) strongest = { ...s, ratio };
     });
-    const actionPlan = weakest && weakest.ratio > 1.05
-        ? `Focus on <strong>${weakest.title}</strong> — you're ${Math.round((weakest.ratio - 1) * (weakest.perfSum / weakest.total))}s slower than target pace.`
-        : answered ? 'Great pacing overall! Keep it up.' : '';
-
+    const actionPlan = weakest && weakest.ratio > 1.05 ? `Focus on <strong>${weakest.title}</strong> — you're ${Math.round((weakest.ratio - 1) * (weakest.perfSum / weakest.total))}s slower than target pace.` : answered ? 'Great pacing overall! Keep it up.' : '';
     document.getElementById('rc-grade').textContent = grade;
     document.getElementById('rc-grade').style.color = color;
     document.getElementById('rc-label').textContent = label;
@@ -433,8 +599,8 @@ function showReportCard(answered, correct, totalTime, totalPerfect) {
         <div class="rc-row"><span>Total Time</span><strong>${totalTime}s</strong></div>
         <div class="rc-row"><span>Perfect Time</span><strong>${totalPerfect}s</strong></div>
         <div class="rc-row"><span>Give Ups</span><strong>${giveUps}</strong></div>
-        ${strongest && strongest !== weakest ? `<div class="rc-row"><span>Strongest</span><strong style="color:var(--green)">${strongest.title}</strong></div>` : ''}
-        ${weakest ? `<div class="rc-row"><span>Weakest</span><strong style="color:var(--red)">${weakest.title}</strong></div>` : ''}`;
+        ${strongest && strongest !== weakest ? `<div class="rc-row"><span>Strongest</span><strong style="color:var(--accent-cyan)">${strongest.title}</strong></div>` : ''}
+        ${weakest ? `<div class="rc-row"><span>Weakest</span><strong style="color:var(--neon-red)">${weakest.title}</strong></div>` : ''}`;
     document.getElementById('rc-action').innerHTML = actionPlan;
     document.getElementById('report-modal').classList.add('open');
 }
@@ -445,10 +611,7 @@ function updateReviewBtn() {
     if (state.reviewingFlagged) { btn.textContent = '✖ Exit Review'; btn.classList.add('active'); }
     else { btn.textContent = `🚩 Review Flagged (${state.flaggedQuestions.length})`; btn.classList.remove('active'); }
 }
-function toggleReviewFlagged() {
-    state.reviewingFlagged = !state.reviewingFlagged; updateReviewBtn();
-    if (state.reviewingFlagged) newQuestion(true);
-}
+function toggleReviewFlagged() { state.reviewingFlagged = !state.reviewingFlagged; updateReviewBtn(); if (state.reviewingFlagged) newQuestion(true); }
 
 // ===== Test Mode =====
 function startTest() {
@@ -468,8 +631,8 @@ function endTest(finished = false) {
     const totalTime = state.stopwatch.elapsed;
     const totalPerfect = state.testSessionHistory.reduce((sum, h) => sum + h.perfectTime, 0);
     state.testMode = false; state.testCount = 0; state.currentQuestionNum = 0;
-    if (answered > 0) showReportCard(answered, correct, totalTime, totalPerfect);
-    else newQuestion();
+    if (answered > 0) { showReportCard(answered, correct, totalTime, totalPerfect); return; }
+    newQuestion();
 }
 
 // ===== Sidebar =====
@@ -477,6 +640,7 @@ function toggleSidebar() { document.getElementById('sidebar').classList.toggle('
 
 // ===== Explanation Modal =====
 function showExplanation() {
+    if (state.hardMode) return;
     const src = document.getElementById('show-explanation').dataset.imageSrc;
     if (!src) { alert('Load a question first.'); return; }
     document.getElementById('explanation-modal-content').src = src;
@@ -484,7 +648,11 @@ function showExplanation() {
 }
 function closeExplanation() { document.getElementById('explanation-modal').classList.remove('open'); }
 
-// ===== Resizer =====
+// ===== Help Modal =====
+function openHelp() { document.getElementById('help-modal').classList.add('open'); }
+function closeHelp() { document.getElementById('help-modal').classList.remove('open'); }
+
+// ===== Resizer (with Desmos sync) =====
 function setupResizer() {
     const resizer = document.getElementById('resizer'), left = document.getElementById('left-panel');
     let dragging = false;
@@ -495,22 +663,19 @@ function setupResizer() {
         const rect = document.getElementById('split-pane').getBoundingClientRect();
         const pct = Math.max(25, Math.min(70, ((e.clientX - rect.left) / (rect.width - 5)) * 100));
         left.style.width = pct + '%'; state.resizerPct = pct;
+        calculator.resize(); // prevent Desmos viewport glitch
     });
     document.addEventListener('mouseup', () => { if (dragging) { dragging = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; saveStorage(); } });
 }
 
-// ===== First-visit Tutorial =====
-function showTutorial() {
-    document.getElementById('tutorial-overlay').classList.add('open');
-}
-function closeTutorial() {
-    document.getElementById('tutorial-overlay').classList.remove('open');
-}
+// ===== Tutorial =====
+function showTutorial() { document.getElementById('tutorial-overlay').classList.add('open'); }
+function closeTutorial() { document.getElementById('tutorial-overlay').classList.remove('open'); }
 
 // ===== Keyboard Shortcuts =====
 document.addEventListener('keydown', e => {
-    const inInput = e.target === document.getElementById('answer-box') || e.target === document.getElementById('cheat-search');
-    if (e.target === document.getElementById('answer-box')) {
+    const inInput = ['answer-box','cheat-search'].includes(e.target.id);
+    if (e.target.id === 'answer-box') {
         if (e.key === 'Enter') { e.preventDefault(); const ok = handleCheckAnswer(); if (ok) { if (state.testMode) { state.currentQuestionNum++; state.currentQuestionNum >= state.testCount ? endTest(true) : newQuestion(); } else if (e.shiftKey) newQuestion(); } }
         return;
     }
@@ -520,12 +685,16 @@ document.addEventListener('keydown', e => {
     if (e.key === 'f' || e.key === 'F') toggleFlag();
     if (e.key === 'c' || e.key === 'C') toggleCrossOut();
     if (e.key === 'h' || e.key === 'H') showCheatSheet(!document.getElementById('cheat-drawer').classList.contains('open'));
+    if (e.key === 'z' || e.key === 'Z') toggleFocusMode();
+    if (state.mcMode && ['1','2','3','4'].includes(e.key)) {
+        const idx = parseInt(e.key) - 1;
+        const btns = document.querySelectorAll('.mc-btn:not(:disabled)');
+        if (btns[idx]) btns[idx].click();
+    }
     if (e.key === 'Escape') {
         showCheatSheet(false);
-        document.getElementById('analytics-modal').classList.remove('open');
-        document.getElementById('report-modal').classList.remove('open');
-        document.getElementById('explanation-modal').classList.remove('open');
-        closeTutorial();
+        ['analytics-modal','report-modal','explanation-modal','help-modal','tutorial-overlay'].forEach(id => document.getElementById(id)?.classList.remove('open'));
+        if (state.focusMode) toggleFocusMode();
     }
 });
 
@@ -542,13 +711,15 @@ function initEventListeners() {
     document.getElementById('analytics-modal').addEventListener('click', e => { if (e.target.id === 'analytics-modal') closeAnalytics(); });
     document.getElementById('close-report').addEventListener('click', () => { document.getElementById('report-modal').classList.remove('open'); newQuestion(); });
     document.getElementById('report-modal').addEventListener('click', e => { if (e.target.id === 'report-modal') { document.getElementById('report-modal').classList.remove('open'); newQuestion(); } });
+    document.getElementById('help-btn').addEventListener('click', openHelp);
+    document.getElementById('close-help').addEventListener('click', closeHelp);
+    document.getElementById('help-modal').addEventListener('click', e => { if (e.target.id === 'help-modal') closeHelp(); });
     document.getElementById('select-all').addEventListener('click', () => { document.querySelectorAll('#category-selection input').forEach(cb => cb.checked = true); saveStorage(); });
     document.getElementById('deselect-all').addEventListener('click', () => { document.querySelectorAll('#category-selection input').forEach(cb => cb.checked = false); saveStorage(); });
     document.getElementById('category-selection').addEventListener('change', saveStorage);
     document.getElementById('theme-toggle').addEventListener('click', toggleDarkMode);
     document.getElementById('mute-btn').addEventListener('click', toggleMute);
     document.getElementById('sidebar-toggle').addEventListener('click', toggleSidebar);
-    document.getElementById('help-btn').addEventListener('click', () => { const p = document.getElementById('help-popup'); p.style.display = p.style.display === 'block' ? 'none' : 'block'; });
     document.getElementById('give-up-btn').addEventListener('click', giveUp);
     document.getElementById('show-desmos-btn').addEventListener('click', showExplanation);
     document.getElementById('clear-history').addEventListener('click', () => { state.sessionStats.history = []; renderHistory(); saveStorage(); });
@@ -564,13 +735,16 @@ function initEventListeners() {
     document.getElementById('cheat-search').addEventListener('input', e => renderCheatSheet(e.target.value));
     document.getElementById('tutorial-close').addEventListener('click', closeTutorial);
     document.getElementById('tutorial-overlay').addEventListener('click', e => { if (e.target.id === 'tutorial-overlay') closeTutorial(); });
+    document.getElementById('hard-mode-toggle').addEventListener('click', toggleHardMode);
+    document.getElementById('mc-mode-toggle').addEventListener('click', toggleMCMode);
+    document.getElementById('focus-exit').addEventListener('click', toggleFocusMode);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const returning = loadStorage();
-    applyTheme(); applyMute();
+    applyTheme(); applyMute(); applyFocusMode(); applyHardMode(); applyMCMode();
     populateCategoryCheckboxes(); renderHistory();
     initEventListeners(); setupResizer(); initCrossOut();
-    updateReviewBtn(); newQuestion();
+    updateReviewBtn(); updateStreak(false); newQuestion();
     if (!returning) showTutorial();
 });
