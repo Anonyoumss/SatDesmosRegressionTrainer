@@ -1,0 +1,78 @@
+> Hermeys_bot:
+Great work! Replit Agent 4 has successfully handled the "Phase 1" heavy lifting. We now have a stable, feature-complete engine. 
+
+As your Project Coordinator, here is the strategic roadmap for Phase 2: "The Bluebook Polish & Mastery Analytics." 
+
+We are moving from "it works" to "it feels like a professional training tool." We will focus on reducing friction (speeding up the user) and increasing the depth of feedback (showing them where they are slow).
+
+Manager's Brief: Phase 2 Objectives
+1.  Click-to-Copy Numbers: Eliminate the "re-typing" penalty. Users should be able to click a number in the question to copy it for Desmos.
+2.  Performance Analytics Dashboard: A visual "Radar Chart" or "Heatmap" showing which categories the user is "Mastering" vs. "Failing" vs. "Too Slow."
+3.  Bluebook "Cross-Out" & "Flagging": Add the ability to strikethrough text and flag questions for later review.
+4.  LaTeX Input Preview: As the user types their answer, show a visual math preview so they don't lose points on syntax errors.
+
+***
+
+Prompt for Replit Agent: Phase 2 — "Bluebook Polish & Analytics"
+
+Current State Context
+The app is currently a 4-file vanilla JS app with a split-pane UI, pacing bar, and 3-attempt logic. We are now adding professional "Quality of Life" features.
+
+---
+
+Stage 1: Interactive Questions (The "Fast-Copy" System)
+On the SAT, speed is everything. We want to reduce "transcription errors."
+1.  Auto-Wrapper: Update the questions.js or app.js to automatically wrap any numbers found in questionText in a <span class="copyable-num">.
+2.  Click-to-Copy: When a user clicks one of these numbers, copy it to the clipboard and show a tiny "Copied!" tooltip. 
+3.  Visual Cue: Give these numbers a subtle dotted underline and change the cursor to a pointer when hovering.
+
+---
+
+Stage 2: Bluebook Annotations (Strikethrough & Flagging)
+Mimic the Digital SAT (Bluebook) navigation features.
+1.  Strikethrough Mode: Add a button in the Question Panel called "Cross-out." When active, clicking on words in the question applies a text-decoration: line-through style.
+2.  Flag for Review: Add a "Flag" icon to the question header. 
+    *   Flagged questions (and their specific generated variables) should be saved to a new localStorage key called flagged_questions.
+    *   Add a "Review Flagged" button in the sidebar to specifically practice these items.
+
+---
+
+Stage 3: LaTeX Answer Preview
+Users often get questions wrong because they type 1/2x when they meant 1/(2x).
+1.  Live Preview: Add a small div (#answer-preview) directly below the answer input box.
+2.  Real-time Rendering: As the user types, use MathJax to render their input into visual math inside this div. If the input is invalid (e.g., unbalanced parentheses), show a subtle "Invalid Syntax" warning instead of an error.
+
+---
+
+Stage 4: Mastery Analytics Dashboard
+Replace the simple "History" list with a "Performance Overview" modal.
+1.  The Analytics Modal: Add a "Stats" button to the header.
+2.  Category Heatmap: Create a grid showing all categories. 
+    *   Color Scale: Green = Fast & Accurate; Yellow = Accurate but Slow; Red = Needs Practice.
+3.  Mastery Logic: 
+    *   Calculate Accuracy % and Average Time vs. Perfect Time per category from the localStorage history.
+    *   Display a "Mastery Level" (Beginner, Intermediate, Pro, Master) based on these metrics.
+
+---
+
+Stage 5: UI/UX Refinements
+1.  Smooth Resizing: Ensure the split-pane resizer saves its position to localStorage so the user doesn't have to adjust it every time they refresh.
+2.  Audio Feedback (Optional/Toggle): Add a subtle, high-quality "ding" for correct answers and a "thud" for 3rd-attempt failures (include a mute button in the header).
+3.  Keyboard Shortcut Expansion: 
+    *   F: Flag current question.
+    *   C: Toggle Cross-out mode.
+
+---
+
+Bug Precautions for the Agent: (1/2)
+
+> Hermeys_bot:
+*   MathJax v3 Async: Remember that MathJax.typeset() is asynchronous if called frequently. Ensure the "Live Preview" doesn't "flash" or lag the typing experience (debounce the input if necessary).
+*   RegEx for Numbers: Be careful with the RegEx for "Stage 1." Don't wrap numbers inside LaTeX commands (like the 2 in \sqrt{2}). Only wrap "standalone" numbers in the text.
+
+***
+
+Coordinator's Advice to Manager:
+The "Stage 1" (Click-to-Copy) is the biggest "wow" feature for SAT prep. If the Agent struggles with the RegEx to find numbers, tell it: "Only wrap numbers that are outside of the $$ LaTeX delimiters."
+
+Once the Agent finishes this, your app will officially be "Pro" level. What do you think of this Phase 2 scope? (2/2)
