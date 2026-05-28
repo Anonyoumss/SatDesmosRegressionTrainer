@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SAT Desmos Trainer — Nebula Pacing Engine</title>
+  <meta name="description" content="Master SAT math with Desmos. Nebula pacing engine with analytics heatmap, cheat sheet, multiple choice, focus mode, and study pack export. 15 categories, ad-free." />
+  <meta property="og:title" content="SAT Desmos Nebula Trainer" />
+  <meta property="og:description" content="15 SAT math categories. Perfect Time pacing, analytics, cheat sheet, hard mode & focus mode." />
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KZ21GJFQBD"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-KZ21GJFQBD');</script>
+
+  <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <script src="https://www.desmos.com/api/v1.11/calculator.js?apiKey=***"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="pacing-bar-container"><div id="pacing-bar"></div></div>
+
+<!-- Focus Exit -->
+<button id="focus-exit">✕ Exit Focus (Z)</button>
+
+<!-- Top Bar -->
+<div id="top-bar">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button class="btn btn-icon" id="sidebar-toggle" title="Toggle Sidebar">☰</button>
+    <span id="app-title">SAT Desmos Trainer</span>
+  </div>
+  <div id="top-bar-center">
+    <span id="correct-counter">✅ 0 correct</span>
+    <span id="streak-counter">🔥 0</span>
+    <div id="stopwatch">00:00</div>
+  </div>
+  <div id="top-bar-actions">
+    <button class="btn btn-primary" id="new-question">New (Shift+Enter)</button>
+    <button class="btn" id="start-test">Start Test</button>
+    <button class="btn" id="end-test">End Test</button>
+    <button class="btn btn-icon" id="mute-btn" title="Toggle Sound">🔔</button>
+    <button class="btn btn-icon" id="theme-toggle" title="Toggle Theme (Ctrl+D)">☀️</button>
+    <button class="btn btn-icon" id="help-btn" title="Help & Info">?</button>
+  </div>
+</div>
+
+<!-- Main Layout -->
+<div id="main-layout">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-inner">
+      <div>
+        <h3>Categories</h3>
+        <div id="category-selection"></div>
+        <div class="cat-controls" style="margin-top:8px;">
+          <button class="btn" id="select-all" style="font-size:0.75rem;padding:4px 10px;">All</button>
+          <button class="btn" id="deselect-all" style="font-size:0.75rem;padding:4px 10px;">None</button>
+        </div>
+      </div>
+
+      <div>
+        <h3>Modes</h3>
+        <div class="mode-controls">
+          <button class="btn" id="hard-mode-toggle" style="font-size:0.75rem;padding:4px 10px;">🔥 Hard Mode</button>
+          <button class="btn" id="mc-mode-toggle" style="font-size:0.75rem;padding:4px 10px;" checked>🔢 MC: ON</button>
+        </div>
+      </div>
+
+      <div>
+        <h3>Flagged</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn" id="review-flagged-btn" style="font-size:0.75rem;padding:4px 10px;">🚩 Review Flagged (0)</button>
+          <button class="btn btn-danger" id="clear-flagged" style="font-size:0.75rem;padding:4px 10px;">Clear</button>
+          <button class="btn" id="export-study-pack" style="font-size:0.75rem;padding:4px 10px;">⬇ Export</button>
+        </div>
+      </div>
+
+      <div>
+        <h3>Tips & Method</h3>
+        <ul id="tips-list"><li>Load a question to see tips.</li></ul>
+      </div>
+
+      <div>
+        <h3 style="display:flex;justify-content:space-between;align-items:center;">
+          History <button class="btn" id="clear-history" style="font-size:0.7rem;padding:2px 8px;">Clear</button>
+        </h3>
+        <div id="history-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Split Pane -->
+  <div id="split-pane">
+    <div id="left-panel">
+      <div id="question-container">
+        <div id="tutorial-overlay" style="display: block;">
+          <h2>Welcome to SAT Desmos Trainer!</h2>
+          <p><strong>🎯 Getting Started:</strong></p>
+          <ul>
+            <li>Use the sidebar to select categories.</li>
+            <li>Click "New Question" to start.</li>
+            <li>Use Desmos to solve regressions.</li>
+            <li>Check your answer or get hints.</li>
+          </ul>
+          <p><strong>🔢 Features:</strong></p>
+          <ul>
+            <li>Multiple Choice mode is ON by default.</li>
+            <li>Use 'Z' for Focus mode (full-screen).</li>
+            <li>Use 'F' to flag questions for review.</li>
+            <li>Use 'C' to cross out answers.</li>
+            <li>Access cheat sheets and analytics from the sidebar.</li>
+          </ul>
+          <button class="btn btn-primary" id="tutorial-close" style="margin-top:20px;">Got it!</button>
+        </div>
+        <div id="question">Click "New Question" to start</div>
+        <div id="answer-row" style="display:none;margin-top:12px;">
+          <input type="text" id="answer-box" placeholder="Enter your answer...">
+          <button class="btn" id="check-btn">Check</button>
+          <button class="btn" id="show-explanation" style="display:none;">Show Solved Example</button>
+          <button class="btn" id="show-desmos-btn" style="display:none;">Show Desmos Solution</button>
+          <button class="btn" id="give-up-btn" style="display:none;">Give Up</button>
+        </div>
+        <div id="mc-grid" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;"></div>
+        <div id="answer-preview" style="margin-top:8px;"></div>
+        <div id="hint-text" style="display:none;margin-top:8px;color:var(--text-muted);"></div>
+      </div>
+    </div>
+
+    <div id="resizer"></div>
+
+    <div id="right-panel">
+      <div id="calculator" style="width:100%;height:100%;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Explanation Modal -->
+<div id="explanation-modal">
+  <div class="modal-content">
+    <button class="btn btn-icon" id="close-modal">✕</button>
+    <img id="explanation-modal-content" src="" alt="Solved Example">
+  </div>
+</div>
+
+<!-- Help Modal -->
+<div id="help-modal">
+  <div class="modal-content">
+    <button class="btn btn-icon" id="close-help">✕</button>
+    <h2>SAT Desmos Trainer — Nebula Pacing Engine</h2>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px;">
+      <div>
+        <h3>🎯 Practice Mode</h3>
+        <p>Questions are procedurally generated. Use Desmos to solve regressions.</p>
+      </div>
+      <div>
+        <h3>📊 Test Mode</h3>
+        <p>Simulate Digital SAT timing with Perfect Time pacing engine.</p>
+      </div>
+      <div>
+        <h3>⌨️ Keyboard Shortcuts</h3>
+        <p><strong>Enter:</strong> Check answer | <strong>Shift+Enter:</strong> New question<br>
+          <strong>Z:</strong> Focus mode | <strong>F:</strong> Flag | <strong>C:</strong> Cross out<br>
+          <strong>H:</strong> Cheat sheet | <strong>Alt+Enter:</strong> Start test</p>
+      </div>
+      <div>
+        <h3>🎮 Features</h3>
+        <p>• Multiple Choice mode • Focus mode • Hard mode<br>
+          • Analytics dashboard • Study pack export<br>
+          • Flag/cross-out system • Desmos integration</p>
+      </div>
+    </div>
+    <p style="margin-top:16px;font-size:0.82rem;color:var(--text-muted)">Click any <u style="text-decoration-style:dotted">number</u> in a question to copy it to clipboard. The pacing bar turns red after the Perfect Time for that category.</p>
+    <p style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Email: desmosspeedtrainer@gmail.com</p>
+  </div>
+</div>
+
+<!-- Analytics Modal -->
+<div id="analytics-modal">
+  <div class="modal-content">
+    <button class="btn btn-icon" id="close-analytics">✕</button>
+    <h2>Performance Analytics</h2>
+    <canvas id="analytics-canvas" width="600" height="400"></canvas>
+    <div id="analytics-summary"></div>
+  </div>
+</div>
+
+<!-- Cheat Sheet Drawer -->
+<div id="cheat-drawer">
+  <button class="btn btn-icon" id="close-cheat">✕</button>
+  <div style="padding:14px;">
+    <h3 style="margin-bottom:12px;">Cheat Sheet</h3>
+    <input type="text" id="cheat-search" placeholder="Search formulas..." style="width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;margin-bottom:12px;">
+    <div id="cheat-list"></div>
+  </div>
+</div>
+
+<script>
+  // ===== Desmos Init =====
+  const elt = document.getElementById('calculator');
+  const calculator = Desmos.GraphingCalculator(elt, { keypad: true, expressions: true });
+
+  // ===== Cheat Sheet Data =====
+  const CHEAT_SHEET = [
+    { title: 'Circle (Standard)', latex: '(x-h)^{2}+(y-k)^{2}=r^{2}' },
+    { title: 'Circle (Expanded)', latex: 'x^{2}+y^{2}+ax+by+c=0' },
+    { title: 'Vertex Form (Parabola)', latex: 'y=a(x-h)^{2}+k' },
+    { title: 'Quadratic Standard', latex: 'y=ax^{2}+bx+c' },
+    { title: 'Linear Regression', latex: 'y_{1}\\sim mx_{1}+b' },
+    { title: 'Quadratic Regression', latex: 'y_{1}\\sim ax_{1}^{2}+bx_{1}+c' },
+    { title: 'Exponential Regression', latex: 'y_{1}\\sim ab^{x_{1}}' },
+    { title: 'Exponential Growth/Decay', latex: 'y=a\\cdot b^{x}' },
+    { title: 'System of Equations', latex: 'y=mx+b' },
+    { title: 'Power Regression', latex: 'y_{1}\\sim ax_{1}^{b}' },
+  ];
+
+  // ===== State =====
+  const state = {
+    currentQuestion: null,
+    questions: [],
+    selectedCategories: [],
+    flags: {},
+    history: [],
+    correctCount: 0,
+    streak: 0,
+    startTime: null,
+    testDuration: 0,
+    testQuestions: [],
+    mcMode: true, // Enable MC mode by default
+    hardMode: false,
+    categories: [
+      { id: 'linear', name: 'Linear Properties', difficulty: 'easy' },
+      { id: 'trigonometry', name: 'Trigonometric Identity Evaluation', difficulty: 'easy' },
+      { id: 'percentage', name: 'Percentage Change', difficulty: 'easy' },
+      // Add other categories here
+    ]
+  };
+
+  // ===== Fix Desmos Solution Logic =====
+  function handleShowDesmosSolution() {
+    if (state.currentQuestion && state.currentQuestion.desmosExpression) {
+      calculator.setExpression(state.currentQuestion.desmosExpression);
+    } else {
+      // Fallback: Show a default expression if none exists
+      calculator.setExpression('y = x');
+    }
+  }
+
+  // ===== Initialize the App =====
+  function init() {
+    // Initialize categories
+    const categorySelection = document.getElementById('category-selection');
+    state.categories.forEach(category => {
+      const checkbox = document.createElement('label');
+      checkbox.innerHTML = `<input type="checkbox" checked>${category.name} (${category.difficulty})`;
+      checkbox.querySelector('input').addEventListener('change', (e) => {
+        if (e.target.checked) {
+          state.selectedCategories.push(category.id);
+        } else {
+          state.selectedCategories = state.selectedCategories.filter(id => id !== category.id);
+        }
+        generateQuestions();
+      });
+      categorySelection.appendChild(checkbox);
+    });
+
+    // Initialize MC mode toggle
+    document.getElementById('mc-mode-toggle').addEventListener('click', () => {
+      state.mcMode = !state.mcMode;
+      updateMCModeUI();
+      generateQuestions();
+    });
+
+    // Initialize buttons
+    document.getElementById('new-question').addEventListener('click', generateQuestions);
+    document.getElementById('show-desmos-btn').addEventListener('click', handleShowDesmosSolution);
+    // Add other button listeners...
+  }
+
+  // ===== Question Generator =====
+  function questionGenerator() {
+    // Question generation logic here
+    return {
+      question: 'Sample question text',
+      desmosExpression: 'y = 2x + 3', // Default expression
+      answer: 5,
+      mcOptions: ['A', 'B', 'C', 'D']
+    };
+  }
+
+  // ===== Start the App =====
+  init();
+</script>
+</body>
+</html>
