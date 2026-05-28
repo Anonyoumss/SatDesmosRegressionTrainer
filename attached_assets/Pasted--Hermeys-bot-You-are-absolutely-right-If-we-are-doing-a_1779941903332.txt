@@ -1,0 +1,73 @@
+> Hermeys_bot:
+You are absolutely right. If we are doing a "one-shot" final update to maximize the remaining usage, we need to treat the Replit Agent as a Senior Partner—giving it the autonomy to fix bugs I might have missed while strictly following your architectural vision.
+
+I have reviewed the repository structure. The current app.js is the brain, but it’s becoming "heavy." This prompt will instruct the Agent to optimize the code while adding the Nebula Update.
+
+***
+
+The Final Synthesis Prompt: "Operation Nebula — Ultimate Edition"
+
+1. Executive Summary & Role
+You are a Senior Software Engineer and the final auditor for the SAT Desmos Pacing Engine. Our goal is to move the app into a "Professional Production" state. You have full autonomy to fix silent bugs, optimize the codebase, and implement the "Nebula Focus" feature set. Do not stop until every feature and bug fix listed below is verified and functional.
+
+---
+
+2. Critical Bug Fixes (The "Janitor" Phase)
+*   Help Menu Alignment: The ? button is on the right, but the menu is misaligned. Re-implement the Help Menu as a centered modal with a backdrop blur. Update the content to link the full project lineage:
+       Original Foundation:* Sceptrell/DesmosRegressionTrainer
+       Feature Evolution:* fifaaworldcup/DesmosRegressionTrainer
+       Pacing & Analytics:* Anonyoumss/SatDesmosRegressionTrainer (This Repo)
+*   Desmos Container Lag: Ensure the #calculator div is properly resized during the split-pane drag so the Desmos API doesn't "flicker" or lose its viewport.
+*   Answer Box Logic: Ensure that when a new question is generated, any previous "Incorrect" or "Hint" text is wiped clean and the input is cleared.
+
+---
+
+3. UI/UX: The "Nebula Deep" Palette
+Overwrite the current "Midnight" theme with a custom "Nebula Deep" identity to differentiate from Bluebook/OnePrep:
+*   Backgrounds: #0a0b10 (Deep Space) and #161b22 (Panel backgrounds).
+*   Primary Accent: #7c4dff (Electric Violet) for primary buttons and focus states.
+*   Secondary Accent: #00e5ff (Cyber Cyan) for "Correct" states and active timers.
+*   High-Stakes Timer: #ff1744 (Neon Red) for when the user exceeds "Perfect Time."
+*   Fonts: Use 'Inter' or 'Geist' if available via CDN, otherwise 'Segoe UI'.
+
+---
+
+4. Major Feature: Focus & Hard Mode
+*   Focus Mode (Hotkey: Z): Implement a toggle that adds a .focus-mode class to the body. This class must hide the sidebar, header, history, and tips via CSS. Only the Question Card, Timer, and Calculator should remain.
+*   Hard Mode (Toggle in Sidebar):
+    *   When ON: Disable the Cheat Sheet (H) and Show Solution buttons.
+    *   Tighter Pacing: Automatically reduce the perfectTime for every question by 20%.
+    *   Reward: Mark questions solved in Hard Mode with a 🏆 icon in the local history.
+
+---
+
+5. Major Feature: Multiple Choice Support
+*   The Logic: Update questions.js generators to optionally include a choices array.
+*   Distractor Logic: If a generator doesn't provide choices, create an "Auto-Distractor" function that generates 3 plausible but wrong answers based on the correct answer (e.g., answer + 1, answer * 2, answer - 5).
+*   The UI: If choices are present, hide the text input and show a 2x2 Grid of buttons (A, B, C, D). On mobile, this grid should stack into a vertical 1x4 list.
+
+---
+
+6. Senior Partner Autonomy (Self-Audit)
+*   Feature Suggestion: Analyze the current app. Add one small feature you think is missing for a "Mastery" experience (e.g., a "Streak" counter, a "Confidence" rating, or an "Undo" for the cross-out).
+*   Bug Audit: Scan app.js for any potential memory leaks from the setInterval timers and ensure they are properly cleared.
+*   Responsive Check: Ensure the "Analytics Heatmap" and "Cheat Sheet" don't break on 10-inch tablets.
+
+---
+
+7. Technical Delivery Requirements (1/2)
+
+> Hermeys_bot:
+*   Keep the app Vanilla JS (No npm, no build steps).
+*   Use CSS Variables for the Nebula palette so it’s easy to tweak.
+*   Ensure localStorage persists the Focus Mode and Hard Mode settings.
+*   Final Hand-off: Before finishing, run a "Dummy Test" in the console to ensure the Multiple Choice buttons correctly trigger handleCheckAnswer.
+
+***
+
+Coordinator's Final Note to You (The Manager):
+This is the most comprehensive prompt I've ever designed for an agent. Since Replit Agent 4 will keep working until the prompt is satisfied, this "one huge prompt" approach is exactly what we need. 
+
+One Final Check: I noticed in the repo that some question generators don't return an integer. If the Agent implements "Multiple Choice," it needs to make sure the choices are formatted the same as the answer (e.g., if the answer is 0.5, don't have a choice like 1/2 unless the validation logic can handle it).
+
+I am ready. Send this to the Agent and let's watch the Nebula Update come to life! (2/2)
