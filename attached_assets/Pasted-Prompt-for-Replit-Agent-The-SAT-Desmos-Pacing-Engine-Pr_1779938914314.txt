@@ -1,0 +1,95 @@
+Prompt for Replit Agent: "The SAT Desmos Pacing Engine"
+
+Project Overview
+You are refactoring and upgrading an existing open-source tool called the Desmos Regression Trainer. It is a vanilla JS/HTML/CSS app that procedurally generates SAT math questions and uses the Desmos API and MathJax for rendering. 
+
+The Goal: Transform this from a "practice list" into a Test Simulation Engine that mimics the "Bluebook" Digital SAT experience, focusing on "Perfect Time" pacing and a minimalist engineering aesthetic.
+
+---
+
+Stage 1: Core Architecture & Bug Fixes
+First, analyze the existing index.html. Clean up the following technical debt that a standard agent might miss:
+1.  Bug Fix (Logic): Find the category ID check logic. Ensure it uses OR operators (||) instead of comma operators which cause layout bugs.
+2.  Bug Fix (Desmos State): When generating a new question, the calculator must be completely reset. Use calculator.setBlank() followed by calculator.setState() to ensure no user-drawn points or regressions persist between rounds.
+3.  Bug Fix (Math): Ensure answer checking uses an epsilon of 1e-9 for all float comparisons to prevent "0.33 vs 0.333" failures.
+4.  Refactor: Keep it as a client-side app (no complex backend), but organize the code into:
+    *   index.html (Layout)
+    *   style.css (Theming)
+    *   questions.js (The math generators)
+    *   app.js (The logic/state engine)
+
+---
+
+Stage 2: The "Bluebook" UI & Dark Mode
+Implement a modern, distraction-free UI inspired by the Digital SAT (Bluebook) and OnePrep.
+1.  Split-Screen Layout: 
+    *   Left Panel: Question text, LaTeX rendering, and Answer Input.
+    *   Right Panel: Full-height Desmos Calculator.
+    *   Collapsible Sidebar: For category selection and "Tips."
+2.  Dark Mode (Default): Implement a "Midnight Engineering" theme.
+    *   Background: #0d1117, Text: #c9d1d9, Calculator Border: #30363d.
+    *   Include a toggle to switch back to Light Mode.
+3.  Visual Polish: Use a monospaced font for numbers and a clean sans-serif (Inter or Segoe UI) for text.
+
+---
+
+Stage 3: Pacing Engine & "Perfect Time"
+This is the core "Oneprep" style simulation logic:
+1.  Target Pacing Data: Assign a perfectTime (in seconds) to every question category (e.g., Easy: 45s, Medium: 75s, Hard: 120s).
+2.  The Pacing Bar: Add a visual timer bar at the top. 
+    *   It stays Green while the user is under the perfectTime.
+    *   It turns Red/Orange once the user exceeds the "Perfect Time."
+3.  Pacing Stats: At the end of a question, show a summary: "Solved in 42s (Perfect Time: 60s) — You saved 18 seconds!"
+
+---
+
+Stage 4: The 3-Attempt Validation Flow
+Don't give the answer away immediately. 
+1.  Tries Counter: Track how many times a user hits "Check."
+2.  The Reveal Flow:
+    *   1st Wrong: Mark red, increment counter.
+    *   2nd Wrong: Show a small hint text.
+    *   3rd Wrong: Reveal the "Show Desmos Solution" button.
+3.  Manual Reveal: Include a "Give Up / Show Answer" button that only appears after the first failed attempt.
+
+---
+
+Stage 5: Local State & Session History
+1.  Persistence: Use localStorage to save the user's selected categories and a "Session History."
+2.  History Panel: A simple list showing the last 10 questions solved, their time taken vs. perfect time, and whether they were solved on the 1st, 2nd, or 3rd try.
+3.  Hotkeys:
+    *   Enter: Check Answer.
+    *   Shift + Enter: New Question.
+    *   Ctrl + D: Toggle Dark Mode.
+
+---
+
+Data Model (Internal Structure) (1/2)
+JavaScript
+
+const state = {
+  currentQuestion: {
+    id: string,
+    startTime: timestamp,
+    tries: 0,
+    perfectTime: 60,
+    answer: number,
+  },
+  sessionStats: {
+    totalCorrect: 0,
+    timeSaved: 0, // seconds saved vs perfect time
+    history: []
+  }
+};
+
+Critical Instructions for the Agent:
+*   MathJax Loading: You MUST call MathJax.typeset() every time a new question is injected into the DOM, or the LaTeX won't render.
+*   Desmos Solution Injection: The "Show Desmos Solution" feature should inject specific LaTeX strings directly into the calculator expressions so the user can see exactly how the regression looks.
+*   CDN Only: Do not use npm or complex builders. Keep it to standard <script> tags for Desmos and MathJax.
+
+***
+
+Manager’s Note to You (The User):
+When the Replit Agent finished the first pass, check the Desmos Calculator. Sometimes it forgets to set the API Key or doesn't size the container correctly. If the calculator is missing, tell the Agent: "The #calculator div has 0 height, please set a fixed height or use flex-grow." 
+
+Otherwise, this prompt is ready to go! (2/2)
