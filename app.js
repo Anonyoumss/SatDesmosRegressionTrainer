@@ -2,6 +2,20 @@
 const elt = document.getElementById('calculator');
 const calculator = Desmos.GraphingCalculator(elt, { keypad: true, expressions: true });
 
+// ===== Cheat Sheet Data =====
+const CHEAT_SHEET = [
+    { title: 'Circle (Standard)', latex: '(x-h)^{2}+(y-k)^{2}=r^{2}' },
+    { title: 'Circle (Expanded)', latex: 'x^{2}+y^{2}+ax+by+c=0' },
+    { title: 'Vertex Form (Parabola)', latex: 'y=a(x-h)^{2}+k' },
+    { title: 'Quadratic Standard', latex: 'y=ax^{2}+bx+c' },
+    { title: 'Linear Regression', latex: 'y_{1}\\sim mx_{1}+b' },
+    { title: 'Quadratic Regression', latex: 'y_{1}\\sim ax_{1}^{2}+bx_{1}+c' },
+    { title: 'Exponential Regression', latex: 'y_{1}\\sim ab^{x_{1}}' },
+    { title: 'Exponential Growth/Decay', latex: 'y=a\\cdot b^{x}' },
+    { title: 'System of Equations', latex: 'y=mx+b' },
+    { title: 'Power Regression', latex: 'y_{1}\\sim ax_{1}^{b}' },
+];
+
 // ===== State =====
 const state = {
     currentQuestion: { id: null, startTime: null, tries: 0, perfectTime: 60, answer: null, category: null, flagged: false, rawText: '' },
@@ -9,10 +23,9 @@ const state = {
     stopwatch: { interval: null, elapsed: 0 },
     pacing: { interval: null, questionStart: null },
     testMode: false, testCount: 0, currentQuestionNum: 0,
+    testSessionHistory: [], giveUpCount: 0,
     darkMode: true, muted: false, crossOutMode: false,
-    resizerPct: 48,
-    flaggedQuestions: [],
-    reviewingFlagged: false,
+    resizerPct: 48, flaggedQuestions: [], reviewingFlagged: false,
 };
 
 // ===== Web Audio =====
@@ -20,8 +33,7 @@ function playSound(type) {
     if (state.muted) return;
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
         osc.connect(gain); gain.connect(ctx.destination);
         if (type === 'correct') { osc.frequency.value = 880; osc.type = 'sine'; gain.gain.setValueAtTime(0.18, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35); osc.start(); osc.stop(ctx.currentTime + 0.35); }
         else { osc.frequency.value = 160; osc.type = 'sawtooth'; gain.gain.setValueAtTime(0.12, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4); osc.start(); osc.stop(ctx.currentTime + 0.4); }
@@ -38,16 +50,15 @@ function loadStorage() {
         if (typeof data.muted === 'boolean') state.muted = data.muted;
         if (typeof data.resizerPct === 'number') state.resizerPct = data.resizerPct;
         if (Array.isArray(data.flaggedQuestions)) state.flaggedQuestions = data.flaggedQuestions;
-    } catch(e) {}
+        return Object.keys(data).length > 0; // true = returning user
+    } catch(e) { return false; }
 }
 function saveStorage() {
     const checked = [...document.querySelectorAll('#category-selection input:checked')].map(cb => cb.value);
     localStorage.setItem('desmosTrainer', JSON.stringify({
-        selectedCategories: checked,
-        history: state.sessionStats.history.slice(-50),
+        selectedCategories: checked, history: state.sessionStats.history.slice(-50),
         darkMode: state.darkMode, muted: state.muted,
-        resizerPct: state.resizerPct,
-        flaggedQuestions: state.flaggedQuestions.slice(-50),
+        resizerPct: state.resizerPct, flaggedQuestions: state.flaggedQuestions.slice(-50),
     }));
 }
 
@@ -75,7 +86,7 @@ function updateStopwatchDisplay() {
 }
 
 // ===== Pacing Bar =====
-function startPacingBar(pt) {
+function startPacingBar() {
     state.pacing.questionStart = Date.now();
     if (state.pacing.interval) clearInterval(state.pacing.interval);
     state.pacing.interval = setInterval(updatePacingBar, 500);
@@ -93,28 +104,26 @@ function updatePacingBar() {
 function showPacingSummary(t) {
     const diff = state.currentQuestion.perfectTime - t;
     const el = document.getElementById('pacing-summary');
-    el.style.display = 'block';
-    el.className = diff >= 0 ? 'fast' : 'slow';
+    el.style.display = 'block'; el.className = diff >= 0 ? 'fast' : 'slow';
     el.textContent = diff >= 0 ? `⏱ ${t}s (Perfect: ${state.currentQuestion.perfectTime}s) — Saved ${diff}s!` : `⏱ ${t}s (Perfect: ${state.currentQuestion.perfectTime}s) — ${Math.abs(diff)}s over.`;
 }
 
-// ===== Click-to-Copy: wrap standalone numbers outside $$ blocks =====
+// ===== Click-to-Copy: wrap standalone numbers outside LaTeX =====
 function wrapCopyableNumbers(html) {
-    // Split on LaTeX delimiters $$ ... $$ and \( ... \), wrap numbers only in plain text segments
     const parts = html.split(/(\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\))/g);
     return parts.map((part, i) => {
-        if (i % 2 === 1) return part; // inside LaTeX — leave untouched
-        // Only wrap standalone numbers (integers or decimals) not already inside tags
-        return part.replace(/(?<![a-zA-Z#\-])(-?\b\d+(?:\.\d+)?\b)(?![a-zA-Z%])/g, (m) =>
-            `<span class="copyable-num" title="Click to copy">${m}</span>`
-        );
+        if (i % 2 === 1) return part;
+        return part.replace(/(?<![a-zA-Z#\-])(-?\b\d+(?:\.\d+)?\b)(?![a-zA-Z%])/g, m =>
+            `<span class="copyable-num" title="Click to copy">${m}</span>`);
     }).join('');
 }
 
 // ===== History =====
 function addToHistory(catId, catTitle, timeTaken, tries, perfectTime) {
-    state.sessionStats.history.unshift({ catId, categoryTitle: catTitle, timeTaken, tries, perfectTime, fast: timeTaken <= perfectTime });
+    const entry = { catId, categoryTitle: catTitle, timeTaken, tries, perfectTime, fast: timeTaken <= perfectTime };
+    state.sessionStats.history.unshift(entry);
     if (state.sessionStats.history.length > 50) state.sessionStats.history.pop();
+    if (state.testMode) state.testSessionHistory.push(entry);
     renderHistory(); saveStorage();
 }
 function renderHistory() {
@@ -130,8 +139,7 @@ function renderHistory() {
 // ===== Attempt Dots =====
 function renderAttemptDots() {
     document.getElementById('attempt-dots').innerHTML = [0,1,2].map(i =>
-        `<div class="attempt-dot${i < state.currentQuestion.tries ? ' used' : ''}"></div>`
-    ).join('');
+        `<div class="attempt-dot${i < state.currentQuestion.tries ? ' used' : ''}"></div>`).join('');
 }
 
 // ===== Cross-out Mode =====
@@ -148,7 +156,6 @@ function initCrossOut() {
     });
 }
 function wrapWordsForCrossOut(html) {
-    // Wrap plain-text words (outside LaTeX) so they can be crossed out
     const parts = html.split(/(\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|<[^>]+>)/g);
     return parts.map((part, i) => {
         if (i % 2 === 1) return part;
@@ -163,12 +170,37 @@ function toggleFlag() {
     btn.textContent = state.currentQuestion.flagged ? '🚩' : '⚑';
     btn.classList.toggle('flagged', state.currentQuestion.flagged);
     if (state.currentQuestion.flagged) {
-        const entry = { id: state.currentQuestion.id, title: state.currentQuestion.category?.title, rawText: state.currentQuestion.rawText, answer: state.currentQuestion.answer };
+        const entry = { id: state.currentQuestion.id, title: state.currentQuestion.category?.title, rawText: state.currentQuestion.rawText, tips: state.currentQuestion.category?.tips || [] };
         if (!state.flaggedQuestions.find(f => f.rawText === entry.rawText)) state.flaggedQuestions.push(entry);
     } else {
         state.flaggedQuestions = state.flaggedQuestions.filter(f => f.rawText !== state.currentQuestion.rawText);
     }
-    saveStorage();
+    updateReviewBtn(); saveStorage();
+}
+
+// ===== Export Study Pack =====
+function exportStudyPack() {
+    if (!state.flaggedQuestions.length) { alert('No flagged questions to export!'); return; }
+    const rows = state.flaggedQuestions.map((q, i) => `
+        <div class="q-block">
+            <div class="q-num">Question ${i+1} — ${q.title || 'Unknown Category'}</div>
+            <div class="q-text">${q.rawText}</div>
+            ${q.tips?.length ? `<div class="q-tips"><strong>Tips:</strong><ul>${q.tips.map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
+        </div>`).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SAT Study Pack</title>
+    <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>
+    <style>body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#222}
+    h1{color:#0969da;margin-bottom:4px}p.sub{color:#666;font-size:0.85rem;margin-bottom:32px}
+    .q-block{border:1px solid #ddd;border-radius:8px;padding:16px 20px;margin-bottom:20px;page-break-inside:avoid}
+    .q-num{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;color:#0969da;font-weight:700;margin-bottom:8px}
+    .q-text{font-size:1.05rem;line-height:1.6;white-space:pre-wrap;margin-bottom:10px}
+    .q-tips{font-size:0.85rem;color:#555}ul{margin:4px 0 0 16px}li{margin-bottom:3px}
+    @media print{body{margin:20px}}</style></head><body>
+    <h1>SAT Desmos Study Pack</h1><p class="sub">Exported ${new Date().toLocaleDateString()} • ${state.flaggedQuestions.length} flagged question(s)</p>
+    ${rows}</body></html>`;
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
 }
 
 // ===== Category Checkboxes =====
@@ -185,7 +217,6 @@ function populateCategoryCheckboxes() {
 // ===== New Question =====
 function newQuestion(fromFlagged = false) {
     let category, questionText, answer;
-
     if (fromFlagged || state.reviewingFlagged) {
         if (!state.flaggedQuestions.length) { alert('No flagged questions!'); state.reviewingFlagged = false; updateReviewBtn(); return; }
         const item = state.flaggedQuestions[Math.floor(Math.random() * state.flaggedQuestions.length)];
@@ -207,7 +238,6 @@ function newQuestion(fromFlagged = false) {
     state.crossOutMode = false;
     document.getElementById('crossout-btn').classList.remove('active');
     document.getElementById('question-box').classList.remove('crossout-mode');
-
     state.currentQuestion = { id: category.id, startTime: Date.now(), tries: 0, perfectTime: category.perfectTime || 90, answer, category, flagged: false, rawText: questionText };
 
     document.getElementById('current-category-title').textContent = category.title;
@@ -216,50 +246,37 @@ function newQuestion(fromFlagged = false) {
 
     const qBox = document.getElementById('question-box');
     qBox.style.whiteSpace = category.id === 'Two points Non-linear' ? 'normal' : 'pre-wrap';
-    const processed = wrapCopyableNumbers(wrapWordsForCrossOut(questionText));
-    qBox.innerHTML = processed;
+    qBox.innerHTML = wrapCopyableNumbers(wrapWordsForCrossOut(questionText));
     MathJax.typeset([qBox]);
-
-    // Bind copy clicks
     qBox.querySelectorAll('.copyable-num').forEach(span => {
-        span.addEventListener('click', e => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(span.textContent).catch(() => {});
-            showCopyTooltip(span);
-        });
+        span.addEventListener('click', e => { e.stopPropagation(); navigator.clipboard.writeText(span.textContent).catch(() => {}); showCopyTooltip(span); });
     });
 
     ['answer-box','result','hint-text','pacing-summary','give-up-btn','show-desmos-btn','answer-preview'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
+        const el = document.getElementById(id); if (!el) return;
         if (id === 'answer-box') { el.value = ''; el.className = ''; }
         else if (id === 'result') { el.textContent = ''; el.className = ''; }
-        else if (id === 'hint-text' || id === 'give-up-btn' || id === 'show-desmos-btn') el.style.display = 'none';
-        else if (id === 'pacing-summary') el.style.display = 'none';
+        else if (['hint-text','give-up-btn','show-desmos-btn','pacing-summary'].includes(id)) el.style.display = 'none';
         else if (id === 'answer-preview') { el.innerHTML = ''; el.className = 'answer-preview'; }
     });
 
     document.getElementById('tips-list').innerHTML = category.tips.map(t => `<li>${t}</li>`).join('');
     document.getElementById('show-explanation').dataset.imageSrc = category.explanationImage || '';
-    renderAttemptDots();
-    startPacingBar(state.currentQuestion.perfectTime);
-    document.getElementById('answer-box').focus();
-    saveStorage();
+    renderAttemptDots(); startPacingBar();
+    document.getElementById('answer-box').focus(); saveStorage();
 }
 
 function showCopyTooltip(el) {
     const tip = document.createElement('div');
-    tip.className = 'copy-tooltip';
-    tip.textContent = 'Copied!';
-    el.appendChild(tip);
-    setTimeout(() => tip.remove(), 1200);
+    tip.className = 'copy-tooltip'; tip.textContent = 'Copied!';
+    el.appendChild(tip); setTimeout(() => tip.remove(), 1200);
 }
 
 // ===== Answer Checking =====
 function parseValue(str) {
     if (typeof str === 'number') return str;
     const s = String(str).trim();
-    if (s.includes('/')) { const [n, d] = s.split('/'); const nv = parseFloat(n), dv = parseFloat(d); if (!isNaN(nv) && !isNaN(dv) && dv !== 0) return nv / dv; }
+    if (s.includes('/')) { const [n,d] = s.split('/'); const nv=parseFloat(n),dv=parseFloat(d); if (!isNaN(nv)&&!isNaN(dv)&&dv!==0) return nv/dv; }
     const n = parseFloat(s); return isNaN(n) ? NaN : n;
 }
 
@@ -268,105 +285,159 @@ function handleCheckAnswer() {
     const box = document.getElementById('answer-box');
     const input = box.value.trim();
     if (!input) { setResult('❌ Please enter an answer.', false); return false; }
-    const userVal = parseValue(input), correctVal = parseValue(state.currentQuestion.answer);
-    if (isNaN(userVal) || isNaN(correctVal)) { setResult('❌ Invalid format. Enter a number or fraction.', false); return false; }
-    const isCorrect = Math.abs(userVal - correctVal) < 1e-9;
-    if (isCorrect) {
+    const uv = parseValue(input), cv = parseValue(state.currentQuestion.answer);
+    if (isNaN(uv) || isNaN(cv)) { setResult('❌ Invalid format. Enter a number or fraction.', false); return false; }
+    if (Math.abs(uv - cv) < 1e-9) {
         const t = Math.round((Date.now() - state.currentQuestion.startTime) / 1000);
-        stopPacingBar();
-        document.getElementById('pacing-bar').style.width = '100%';
-        box.classList.add('correct');
-        setResult('✅ Correct!', true);
-        playSound('correct');
+        stopPacingBar(); document.getElementById('pacing-bar').style.width = '100%';
+        box.classList.add('correct'); setResult('✅ Correct!', true); playSound('correct');
         state.sessionStats.totalCorrect++;
         document.getElementById('correct-counter').textContent = `✅ ${state.sessionStats.totalCorrect} correct`;
         addToHistory(state.currentQuestion.id, state.currentQuestion.category.title, t, state.currentQuestion.tries + 1, state.currentQuestion.perfectTime);
-        showPacingSummary(t);
-        state.currentQuestion.answer = null;
+        showPacingSummary(t); state.currentQuestion.answer = null;
         return true;
     } else {
         state.currentQuestion.tries++;
-        box.classList.remove('correct'); box.classList.add('incorrect');
-        renderAttemptDots();
+        box.classList.remove('correct'); box.classList.add('incorrect'); renderAttemptDots();
         if (state.currentQuestion.tries === 1) { setResult('❌ Incorrect. Try again!', false); document.getElementById('give-up-btn').style.display = 'inline-block'; }
         else if (state.currentQuestion.tries === 2) { setResult('❌ Still incorrect.', false); document.getElementById('hint-text').style.display = 'block'; }
         else { playSound('wrong'); setResult(`❌ Answer: ${state.currentQuestion.answer}`, false); document.getElementById('show-desmos-btn').style.display = 'inline-block'; document.getElementById('give-up-btn').style.display = 'none'; state.currentQuestion.answer = null; }
-        box.focus();
-        return false;
+        box.focus(); return false;
     }
 }
-
 function setResult(msg, ok) { const el = document.getElementById('result'); el.textContent = msg; el.className = ok ? 'correct' : 'incorrect'; }
 
 function giveUp() {
-    stopPacingBar();
+    stopPacingBar(); state.giveUpCount++;
     setResult(`Answer: ${state.currentQuestion.answer}`, false);
     document.getElementById('show-desmos-btn').style.display = 'inline-block';
     document.getElementById('give-up-btn').style.display = 'none';
-    const ht = document.getElementById('hint-text');
-    ht.style.display = 'block'; ht.textContent = 'Check "Show Solved Example" for the method.';
+    const ht = document.getElementById('hint-text'); ht.style.display = 'block'; ht.textContent = 'Check "Show Solved Example" for the method.';
     state.currentQuestion.answer = null;
 }
 
-// ===== Live Answer Preview (debounced) =====
+// ===== Live Answer Preview =====
 let previewTimer = null;
 function updateAnswerPreview(val) {
     clearTimeout(previewTimer);
     const prev = document.getElementById('answer-preview');
     if (!val.trim()) { prev.innerHTML = ''; return; }
     previewTimer = setTimeout(() => {
-        try {
-            prev.innerHTML = `\\(${val}\\)`;
-            prev.className = 'answer-preview';
-            MathJax.typeset([prev]);
-        } catch(e) { prev.innerHTML = '<span style="color:var(--orange);font-size:0.78rem">Invalid syntax</span>'; prev.className = 'answer-preview invalid'; }
+        try { prev.innerHTML = `\\(${val}\\)`; prev.className = 'answer-preview'; MathJax.typeset([prev]); }
+        catch(e) { prev.innerHTML = '<span style="color:var(--orange);font-size:0.78rem">Invalid syntax</span>'; prev.className = 'answer-preview invalid'; }
     }, 200);
 }
 
 // ===== Analytics Modal =====
-function getMasteryLabel(accuracy, avgRatio) {
-    if (accuracy >= 0.85 && avgRatio <= 1.1) return { label: 'Master', color: '#3fb950' };
-    if (accuracy >= 0.7 && avgRatio <= 1.3) return { label: 'Pro', color: '#58a6ff' };
-    if (accuracy >= 0.5) return { label: 'Intermediate', color: '#d29922' };
+function getMasteryLabel(acc, ratio) {
+    if (acc >= 0.85 && ratio <= 1.1) return { label: 'Master', color: '#3fb950' };
+    if (acc >= 0.7 && ratio <= 1.3) return { label: 'Pro', color: '#58a6ff' };
+    if (acc >= 0.5) return { label: 'Intermediate', color: '#d29922' };
     return { label: 'Beginner', color: '#f85149' };
 }
-function heatColor(accuracy, avgRatio) {
-    if (accuracy === undefined) return 'var(--surface2)';
-    if (accuracy >= 0.8 && avgRatio <= 1.1) return 'rgba(63,185,80,0.35)';
-    if (accuracy >= 0.6 && avgRatio <= 1.4) return 'rgba(88,166,255,0.25)';
-    if (accuracy >= 0.4) return 'rgba(210,153,34,0.35)';
+function heatColor(acc, ratio) {
+    if (acc === undefined) return 'var(--surface2)';
+    if (acc >= 0.8 && ratio <= 1.1) return 'rgba(63,185,80,0.35)';
+    if (acc >= 0.6 && ratio <= 1.4) return 'rgba(88,166,255,0.25)';
+    if (acc >= 0.4) return 'rgba(210,153,34,0.35)';
     return 'rgba(248,81,73,0.35)';
 }
 function openAnalytics() {
-    const modal = document.getElementById('analytics-modal');
     const grid = document.getElementById('analytics-grid');
     const h = state.sessionStats.history;
     const stats = {};
     h.forEach(item => {
         if (!stats[item.catId]) stats[item.catId] = { title: item.categoryTitle, correct: 0, total: 0, timeSum: 0, perfSum: 0 };
-        const s = stats[item.catId];
-        s.total++; s.timeSum += item.timeTaken; s.perfSum += item.perfectTime;
-        if (item.tries === 1 || (item.timeTaken <= item.perfectTime)) s.correct++;
+        const s = stats[item.catId]; s.total++; s.timeSum += item.timeTaken; s.perfSum += item.perfectTime;
+        if (item.tries === 1 || item.timeTaken <= item.perfectTime) s.correct++;
     });
-    if (!grid) return;
     if (!Object.keys(stats).length) { grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1">Solve some questions first!</p>'; }
     else {
         grid.innerHTML = Object.values(stats).map(s => {
-            const acc = s.correct / s.total;
-            const ratio = s.total ? s.timeSum / s.perfSum : 1;
+            const acc = s.correct / s.total, ratio = s.timeSum / s.perfSum;
             const { label, color } = getMasteryLabel(acc, ratio);
-            const bg = heatColor(acc, ratio);
-            return `<div class="analytics-cell" style="background:${bg}">
+            return `<div class="analytics-cell" style="background:${heatColor(acc,ratio)}">
                 <div class="ac-title">${s.title}</div>
                 <div class="ac-mastery" style="color:${color}">${label}</div>
-                <div class="ac-stats">${Math.round(acc*100)}% acc • avg ${(s.total ? s.timeSum/s.total : 0).toFixed(0)}s / ${(s.total ? s.perfSum/s.total : 0).toFixed(0)}s</div>
-                <div class="ac-count">${s.total} solved</div>
-            </div>`;
+                <div class="ac-stats">${Math.round(acc*100)}% acc • avg ${(s.timeSum/s.total).toFixed(0)}s / ${(s.perfSum/s.total).toFixed(0)}s</div>
+                <div class="ac-count">${s.total} solved</div></div>`;
         }).join('');
     }
-    modal.classList.add('open');
+    document.getElementById('analytics-modal').classList.add('open');
 }
 function closeAnalytics() { document.getElementById('analytics-modal').classList.remove('open'); }
+
+// ===== Cheat Sheet =====
+function renderCheatSheet(filter = '') {
+    const q = filter.toLowerCase();
+    const list = CHEAT_SHEET.filter(f => !q || f.title.toLowerCase().includes(q));
+    const container = document.getElementById('cheat-list');
+    if (!list.length) { container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem">No matches.</div>'; return; }
+    container.innerHTML = list.map(f => `
+        <div class="cheat-item">
+            <div class="cheat-title">${f.title}</div>
+            <div class="cheat-latex">\\(${f.latex}\\)</div>
+            <button class="btn" style="font-size:0.72rem;padding:3px 10px;margin-top:6px" onclick="injectFormula('${f.latex.replace(/'/g,"\\'")}')">→ Desmos</button>
+        </div>`).join('');
+    MathJax.typeset([container]);
+}
+function injectFormula(latex) {
+    calculator.setExpression({ id: String(Date.now()), latex });
+    showCheatSheet(false);
+}
+function showCheatSheet(open = true) {
+    const drawer = document.getElementById('cheat-drawer');
+    drawer.classList.toggle('open', open);
+    if (open) { document.getElementById('cheat-search').value = ''; renderCheatSheet(); document.getElementById('cheat-search').focus(); }
+}
+
+// ===== Test Report Card =====
+function calcTestGrade(answered, correct, totalTime, totalPerfect, giveUps) {
+    const acc = answered ? correct / answered : 0;
+    const underPace = totalTime < totalPerfect;
+    if (acc === 1 && underPace) return { grade: 'A', color: '#3fb950', label: 'Excellent!' };
+    if (acc === 1) return { grade: 'B', color: '#58a6ff', label: 'All correct, but a bit slow.' };
+    if (acc >= 0.8) return { grade: 'C', color: '#d29922', label: 'Good, but review your mistakes.' };
+    if (acc >= 0.7 && giveUps < 2) return { grade: 'D', color: '#f85149', label: 'Needs improvement.' };
+    return { grade: 'F', color: '#f85149', label: 'Keep practicing — you\'ll get there!' };
+}
+function showReportCard(answered, correct, totalTime, totalPerfect) {
+    const giveUps = state.giveUpCount;
+    const { grade, color, label } = calcTestGrade(answered, correct, totalTime, totalPerfect, giveUps);
+
+    // Category analysis
+    const catStats = {};
+    state.testSessionHistory.forEach(item => {
+        if (!catStats[item.catId]) catStats[item.catId] = { title: item.categoryTitle, timeSum: 0, total: 0, correct: 0, perfSum: 0 };
+        const s = catStats[item.catId]; s.total++; s.timeSum += item.timeTaken; s.perfSum += item.perfectTime;
+        if (item.tries === 1 || item.timeTaken <= item.perfectTime) s.correct++;
+    });
+    const catArr = Object.values(catStats);
+    let weakest = null, strongest = null;
+    catArr.forEach(s => {
+        const ratio = s.timeSum / (s.perfSum || 1);
+        if (!weakest || ratio > weakest.ratio) weakest = { ...s, ratio };
+        if (!strongest || ratio < strongest.ratio) strongest = { ...s, ratio };
+    });
+    const actionPlan = weakest && weakest.ratio > 1.05
+        ? `Focus on <strong>${weakest.title}</strong> — you're ${Math.round((weakest.ratio - 1) * (weakest.perfSum / weakest.total))}s slower than target pace.`
+        : answered ? 'Great pacing overall! Keep it up.' : '';
+
+    document.getElementById('rc-grade').textContent = grade;
+    document.getElementById('rc-grade').style.color = color;
+    document.getElementById('rc-label').textContent = label;
+    document.getElementById('rc-stats').innerHTML = `
+        <div class="rc-row"><span>Questions</span><strong>${answered}</strong></div>
+        <div class="rc-row"><span>Correct</span><strong>${correct} / ${answered}</strong></div>
+        <div class="rc-row"><span>Accuracy</span><strong>${answered ? Math.round((correct/answered)*100) : 0}%</strong></div>
+        <div class="rc-row"><span>Total Time</span><strong>${totalTime}s</strong></div>
+        <div class="rc-row"><span>Perfect Time</span><strong>${totalPerfect}s</strong></div>
+        <div class="rc-row"><span>Give Ups</span><strong>${giveUps}</strong></div>
+        ${strongest && strongest !== weakest ? `<div class="rc-row"><span>Strongest</span><strong style="color:var(--green)">${strongest.title}</strong></div>` : ''}
+        ${weakest ? `<div class="rc-row"><span>Weakest</span><strong style="color:var(--red)">${weakest.title}</strong></div>` : ''}`;
+    document.getElementById('rc-action').innerHTML = actionPlan;
+    document.getElementById('report-modal').classList.add('open');
+}
 
 // ===== Flagged Review =====
 function updateReviewBtn() {
@@ -375,8 +446,7 @@ function updateReviewBtn() {
     else { btn.textContent = `🚩 Review Flagged (${state.flaggedQuestions.length})`; btn.classList.remove('active'); }
 }
 function toggleReviewFlagged() {
-    state.reviewingFlagged = !state.reviewingFlagged;
-    updateReviewBtn();
+    state.reviewingFlagged = !state.reviewingFlagged; updateReviewBtn();
     if (state.reviewingFlagged) newQuestion(true);
 }
 
@@ -387,15 +457,19 @@ function startTest() {
     const checked = document.querySelectorAll('#category-selection input:checked');
     if (!checked.length) { alert('Please select at least one category!'); return; }
     state.testMode = true; state.testCount = n; state.currentQuestionNum = 0;
+    state.testSessionHistory = []; state.giveUpCount = 0;
     startStopwatch(); newQuestion();
 }
 function endTest(finished = false) {
     if (!state.testMode) return;
     stopStopwatch();
     const answered = finished ? state.testCount : state.currentQuestionNum;
-    if (answered > 0) alert(`Test ended! ${answered} questions in ${state.stopwatch.elapsed}s — avg ${(state.stopwatch.elapsed/answered).toFixed(1)}s/q`);
+    const correct = state.testSessionHistory.filter(h => h.tries === 1 || h.timeTaken <= h.perfectTime).length;
+    const totalTime = state.stopwatch.elapsed;
+    const totalPerfect = state.testSessionHistory.reduce((sum, h) => sum + h.perfectTime, 0);
     state.testMode = false; state.testCount = 0; state.currentQuestionNum = 0;
-    newQuestion();
+    if (answered > 0) showReportCard(answered, correct, totalTime, totalPerfect);
+    else newQuestion();
 }
 
 // ===== Sidebar =====
@@ -412,33 +486,47 @@ function closeExplanation() { document.getElementById('explanation-modal').class
 
 // ===== Resizer =====
 function setupResizer() {
-    const resizer = document.getElementById('resizer');
-    const left = document.getElementById('left-panel');
+    const resizer = document.getElementById('resizer'), left = document.getElementById('left-panel');
     let dragging = false;
-    // restore saved position
     left.style.width = state.resizerPct + '%';
     resizer.addEventListener('mousedown', () => { dragging = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; });
     document.addEventListener('mousemove', e => {
         if (!dragging) return;
         const rect = document.getElementById('split-pane').getBoundingClientRect();
         const pct = Math.max(25, Math.min(70, ((e.clientX - rect.left) / (rect.width - 5)) * 100));
-        left.style.width = pct + '%';
-        state.resizerPct = pct;
+        left.style.width = pct + '%'; state.resizerPct = pct;
     });
     document.addEventListener('mouseup', () => { if (dragging) { dragging = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; saveStorage(); } });
 }
 
+// ===== First-visit Tutorial =====
+function showTutorial() {
+    document.getElementById('tutorial-overlay').classList.add('open');
+}
+function closeTutorial() {
+    document.getElementById('tutorial-overlay').classList.remove('open');
+}
+
 // ===== Keyboard Shortcuts =====
 document.addEventListener('keydown', e => {
-    const inInput = e.target === document.getElementById('answer-box');
-    if (inInput) {
+    const inInput = e.target === document.getElementById('answer-box') || e.target === document.getElementById('cheat-search');
+    if (e.target === document.getElementById('answer-box')) {
         if (e.key === 'Enter') { e.preventDefault(); const ok = handleCheckAnswer(); if (ok) { if (state.testMode) { state.currentQuestionNum++; state.currentQuestionNum >= state.testCount ? endTest(true) : newQuestion(); } else if (e.shiftKey) newQuestion(); } }
         return;
     }
+    if (inInput) return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'd') { e.preventDefault(); toggleDarkMode(); }
     if (e.key === 'Enter' && e.altKey) { e.preventDefault(); startTest(); }
     if (e.key === 'f' || e.key === 'F') toggleFlag();
     if (e.key === 'c' || e.key === 'C') toggleCrossOut();
+    if (e.key === 'h' || e.key === 'H') showCheatSheet(!document.getElementById('cheat-drawer').classList.contains('open'));
+    if (e.key === 'Escape') {
+        showCheatSheet(false);
+        document.getElementById('analytics-modal').classList.remove('open');
+        document.getElementById('report-modal').classList.remove('open');
+        document.getElementById('explanation-modal').classList.remove('open');
+        closeTutorial();
+    }
 });
 
 // ===== Init =====
@@ -452,6 +540,8 @@ function initEventListeners() {
     document.getElementById('explanation-modal').addEventListener('click', e => { if (e.target.id === 'explanation-modal') closeExplanation(); });
     document.getElementById('close-analytics').addEventListener('click', closeAnalytics);
     document.getElementById('analytics-modal').addEventListener('click', e => { if (e.target.id === 'analytics-modal') closeAnalytics(); });
+    document.getElementById('close-report').addEventListener('click', () => { document.getElementById('report-modal').classList.remove('open'); newQuestion(); });
+    document.getElementById('report-modal').addEventListener('click', e => { if (e.target.id === 'report-modal') { document.getElementById('report-modal').classList.remove('open'); newQuestion(); } });
     document.getElementById('select-all').addEventListener('click', () => { document.querySelectorAll('#category-selection input').forEach(cb => cb.checked = true); saveStorage(); });
     document.getElementById('deselect-all').addEventListener('click', () => { document.querySelectorAll('#category-selection input').forEach(cb => cb.checked = false); saveStorage(); });
     document.getElementById('category-selection').addEventListener('change', saveStorage);
@@ -466,19 +556,21 @@ function initEventListeners() {
     document.getElementById('flag-btn').addEventListener('click', toggleFlag);
     document.getElementById('crossout-btn').addEventListener('click', toggleCrossOut);
     document.getElementById('review-flagged-btn').addEventListener('click', toggleReviewFlagged);
+    document.getElementById('clear-flagged').addEventListener('click', () => { state.flaggedQuestions = []; saveStorage(); updateReviewBtn(); });
+    document.getElementById('export-study-pack').addEventListener('click', exportStudyPack);
     document.getElementById('answer-box').addEventListener('input', e => updateAnswerPreview(e.target.value));
-    document.getElementById('clear-flagged').addEventListener('click', () => { state.flaggedQuestions = []; saveStorage(); updateReviewBtn(); alert('Flagged questions cleared.'); });
+    document.getElementById('cheat-btn').addEventListener('click', () => showCheatSheet(!document.getElementById('cheat-drawer').classList.contains('open')));
+    document.getElementById('close-cheat').addEventListener('click', () => showCheatSheet(false));
+    document.getElementById('cheat-search').addEventListener('input', e => renderCheatSheet(e.target.value));
+    document.getElementById('tutorial-close').addEventListener('click', closeTutorial);
+    document.getElementById('tutorial-overlay').addEventListener('click', e => { if (e.target.id === 'tutorial-overlay') closeTutorial(); });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadStorage();
-    applyTheme();
-    applyMute();
-    populateCategoryCheckboxes();
-    renderHistory();
-    initEventListeners();
-    setupResizer();
-    initCrossOut();
-    updateReviewBtn();
-    newQuestion();
+    const returning = loadStorage();
+    applyTheme(); applyMute();
+    populateCategoryCheckboxes(); renderHistory();
+    initEventListeners(); setupResizer(); initCrossOut();
+    updateReviewBtn(); newQuestion();
+    if (!returning) showTutorial();
 });

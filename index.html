@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SAT Regression Trainer • Desmos Tricks & Guide</title>
-  <meta name="description" content="Master SAT math regressions with Desmos. Linear, quadratic, exponential models with pacing analytics." />
-  <meta property="og:title" content="SAT Regression Trainer" />
+  <title>SAT Desmos Trainer — Paced Practice Engine</title>
+  <meta name="description" content="Master SAT math with Desmos. Paced regression practice with analytics, cheat sheet, and study pack export. 15 categories, ad-free." />
+  <meta property="og:title" content="SAT Desmos Pacing Engine" />
+  <meta property="og:description" content="15 SAT math categories. Paced questions, analytics heatmap, cheat sheet, and flagged review system." />
 
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-KZ21GJFQBD"></script>
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-KZ21GJFQBD');</script>
@@ -22,7 +23,7 @@
 <div id="top-bar">
   <div style="display:flex;align-items:center;gap:8px;">
     <button class="btn btn-icon" id="sidebar-toggle" title="Toggle Sidebar">☰</button>
-    <span id="app-title">SAT Regression Trainer</span>
+    <span id="app-title">SAT Desmos Trainer</span>
   </div>
   <div id="top-bar-center">
     <span id="correct-counter">✅ 0 correct</span>
@@ -32,6 +33,7 @@
     <button class="btn btn-primary" id="new-question">New (Shift+Enter)</button>
     <button class="btn" id="start-test">Start Test</button>
     <button class="btn btn-danger" id="end-test">End Test</button>
+    <button class="btn btn-icon" id="cheat-btn" title="Cheat Sheet (H)">📋</button>
     <button class="btn btn-icon" id="stats-btn" title="Analytics">📊</button>
     <button class="btn btn-icon" id="mute-btn" title="Toggle Sound">🔔</button>
     <button class="btn btn-icon" id="theme-toggle" title="Toggle Theme (Ctrl+D)">☀️</button>
@@ -60,11 +62,12 @@
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn" id="review-flagged-btn" style="font-size:0.75rem;padding:4px 10px;">🚩 Review Flagged (0)</button>
           <button class="btn btn-danger" id="clear-flagged" style="font-size:0.75rem;padding:4px 10px;">Clear</button>
+          <button class="btn" id="export-study-pack" style="font-size:0.75rem;padding:4px 10px;">⬇ Export</button>
         </div>
       </div>
 
       <div>
-        <h3>Tips & Method</h3>
+        <h3>Tips &amp; Method</h3>
         <ul id="tips-list"><li>Load a question to see tips.</li></ul>
       </div>
 
@@ -124,6 +127,16 @@
   </div>
 </div>
 
+<!-- Cheat Sheet Drawer -->
+<div id="cheat-drawer">
+  <div id="cheat-header">
+    <span style="font-weight:700;color:var(--accent);font-size:0.9rem">📋 Desmos Cheat Sheet</span>
+    <button class="btn btn-icon" id="close-cheat">✕</button>
+  </div>
+  <input type="text" id="cheat-search" placeholder="Search formulas…" autocomplete="off" />
+  <div id="cheat-list"></div>
+</div>
+
 <!-- Explanation Modal -->
 <div id="explanation-modal" class="modal-overlay">
   <span class="close-btn" id="close-modal">&times;</span>
@@ -142,6 +155,31 @@
   </div>
 </div>
 
+<!-- Report Card Modal -->
+<div id="report-modal" class="modal-overlay">
+  <div class="modal-box" style="min-width:300px;width:480px;text-align:center;">
+    <h3>🎓 Test Report Card</h3>
+    <div id="rc-grade" style="font-size:5rem;font-weight:900;line-height:1;margin:12px 0">—</div>
+    <div id="rc-label" style="font-size:1rem;color:var(--text-muted);margin-bottom:20px"></div>
+    <div id="rc-stats" style="text-align:left;margin-bottom:16px"></div>
+    <div id="rc-action" style="font-size:0.85rem;color:var(--text-muted);background:var(--surface2);border-radius:8px;padding:10px 14px;text-align:left;margin-bottom:20px;line-height:1.5"></div>
+    <button class="btn btn-primary" id="close-report" style="width:100%">Continue Practicing →</button>
+  </div>
+</div>
+
+<!-- First-visit Tutorial -->
+<div id="tutorial-overlay" class="modal-overlay">
+  <div class="modal-box" style="width:420px;text-align:center;">
+    <h3 style="margin-bottom:20px">👋 Welcome to SAT Desmos Trainer</h3>
+    <div class="tutorial-steps">
+      <div class="tut-step"><div class="tut-num">1</div><div class="tut-text">Select the <strong>categories</strong> you want to practice in the sidebar.</div></div>
+      <div class="tut-step"><div class="tut-num">2</div><div class="tut-text">Use <strong>Desmos</strong> on the right to solve — click numbers to copy them instantly.</div></div>
+      <div class="tut-step"><div class="tut-num">3</div><div class="tut-text">Type your answer and try to <strong>beat the Perfect Time</strong> shown on the pacing bar.</div></div>
+    </div>
+    <button class="btn btn-primary" id="tutorial-close" style="margin-top:20px;width:100%">Let's go! →</button>
+  </div>
+</div>
+
 <!-- Help Popup -->
 <div id="help-popup">
   <h4>Info / Help</h4>
@@ -152,8 +190,10 @@
   <p>Ctrl+D → Toggle Dark Mode</p>
   <p>F → Flag question</p>
   <p>C → Toggle Cross-out mode</p>
+  <p>H → Toggle Cheat Sheet</p>
+  <p>Esc → Close any panel</p>
   <hr style="border-color:var(--border);margin:8px 0;" />
-  <p>Click any <u style="text-decoration-style:dotted">number</u> in the question to copy it to clipboard.</p>
+  <p>Click any <u style="text-decoration-style:dotted">number</u> in the question to copy it.</p>
   <p>The pacing bar turns red after the "Perfect Time" for that category.</p>
   <hr style="border-color:var(--border);margin:8px 0;" />
   <p><a href="https://www.desmos.com/graphingshortcuts" target="_blank" rel="noopener">Desmos shortcuts</a></p>
