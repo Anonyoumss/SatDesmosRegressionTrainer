@@ -654,7 +654,7 @@ function showExampleSolution() {
 
 function handleShowDesmosSolution() {
     if (state.hardMode) return;
-    if (!state.currentQuestion.category || !state.currentQuestion.category.desmosSolution) {
+    if (!state.currentQuestion.category || !state.currentQuestion.category.desmosExpressions) {
         alert('No Desmos solution available for this question.');
         return;
     }
@@ -663,7 +663,7 @@ function handleShowDesmosSolution() {
     calculator.setBlank();
     
     // Inject the solution expressions
-    state.currentQuestion.category.desmosSolution.forEach((latex, index) => {
+    state.currentQuestion.category.desmosExpressions.forEach((latex, index) => {
         calculator.setExpression({ 
             id: 'sol-' + index, 
             latex: latex, 
