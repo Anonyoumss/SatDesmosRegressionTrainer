@@ -216,7 +216,12 @@ function handleMCAnswer(choice, btnEl) {
 
     if (isCorrect) {
         btnEl.classList.add('mc-correct');
-        document.querySelectorAll('.mc-btn').forEach(b => b.disabled = true);
+        document.querySelectorAll('.mc-btn').forEach(b => {
+            b.disabled = true;
+            if (b !== btnEl) {
+                b.classList.add('mc-incorrect');
+            }
+        });
         const t = Math.round((Date.now() - state.currentQuestion.startTime) / 1000);
         stopPacingBar(); document.getElementById('pacing-bar').style.width = '100%';
         setResult('✅ Correct!', true); playSound('correct');
@@ -639,12 +644,32 @@ function endTest(finished = false) {
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
 
 // ===== Explanation Modal =====
-function showExplanation() {
+function showExampleSolution() {
     if (state.hardMode) return;
     const src = document.getElementById('show-explanation').dataset.imageSrc;
     if (!src) { alert('Load a question first.'); return; }
     document.getElementById('explanation-modal-content').src = src;
     document.getElementById('explanation-modal').classList.add('open');
+}
+
+function handleShowDesmosSolution() {
+    if (state.hardMode) return;
+    if (!state.currentQuestion.category || !state.currentQuestion.category.desmosSolution) {
+        alert('No Desmos solution available for this question.');
+        return;
+    }
+    
+    // Clear existing expressions first
+    calculator.setBlank();
+    
+    // Inject the solution expressions
+    state.currentQuestion.category.desmosSolution.forEach((latex, index) => {
+        calculator.setExpression({ 
+            id: 'sol-' + index, 
+            latex: latex, 
+            color: '#7c4dff' 
+        });
+    });
 }
 function closeExplanation() { document.getElementById('explanation-modal').classList.remove('open'); }
 
@@ -704,7 +729,7 @@ function initEventListeners() {
     document.getElementById('new-question').addEventListener('click', () => newQuestion());
     document.getElementById('start-test').addEventListener('click', startTest);
     document.getElementById('end-test').addEventListener('click', () => { if (confirm('End test?')) endTest(false); });
-    document.getElementById('show-explanation').addEventListener('click', showExplanation);
+    document.getElementById('show-explanation').addEventListener('click', showExampleSolution);
     document.getElementById('close-modal').addEventListener('click', closeExplanation);
     document.getElementById('explanation-modal').addEventListener('click', e => { if (e.target.id === 'explanation-modal') closeExplanation(); });
     document.getElementById('close-analytics').addEventListener('click', closeAnalytics);
@@ -721,7 +746,7 @@ function initEventListeners() {
     document.getElementById('mute-btn').addEventListener('click', toggleMute);
     document.getElementById('sidebar-toggle').addEventListener('click', toggleSidebar);
     document.getElementById('give-up-btn').addEventListener('click', giveUp);
-    document.getElementById('show-desmos-btn').addEventListener('click', showExplanation);
+    document.getElementById('show-desmos-btn').addEventListener('click', handleShowDesmosSolution);
     document.getElementById('clear-history').addEventListener('click', () => { state.sessionStats.history = []; renderHistory(); saveStorage(); });
     document.getElementById('stats-btn').addEventListener('click', openAnalytics);
     document.getElementById('flag-btn').addEventListener('click', toggleFlag);

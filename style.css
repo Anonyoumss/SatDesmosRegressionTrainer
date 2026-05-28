@@ -66,10 +66,19 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); min-
 /* ===== Layout ===== */
 #main-layout { display: flex; height: calc(100vh - 55px); overflow: hidden; }
 
-/* ===== Focus Mode ===== */
-body.focus-mode #top-bar { height: 0; padding: 0; overflow: hidden; border: none; }
-body.focus-mode #main-layout { height: 100vh; }
-body.focus-mode #sidebar { width: 0; min-width: 0; border: none; }
+body.focus-mode {
+    #top-bar { height: 0; padding: 0; overflow: hidden; border: none; display: none; }
+    #main-layout { height: 100vh; }
+    #sidebar { width: 0; min-width: 0; border: none; display: none; }
+    #pacing-bar-container { display: none; }
+    #split-pane { height: 100vh !important; }
+    #left-panel { height: 100vh !important; }
+    #right-panel { height: 100vh !important; }
+    #calculator { height: 100vh !important; }
+    #question-container { height: calc(100vh - 60px) !important; }
+    #question { margin-top: 0 !important; }
+}
+
 #focus-exit { display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1500; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 8px 18px; font-size: 0.8rem; color: var(--text-muted); align-items: center; gap: 6px; cursor: pointer; backdrop-filter: blur(8px); }
 #focus-exit:hover { color: var(--accent-violet); border-color: var(--accent-violet); }
 
