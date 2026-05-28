@@ -4,27 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>SAT Regression Trainer • Desmos Tricks & Guide</title>
-  <meta name="description" content="Master SAT math regressions with our comprehensive guide and Desmos calculator tricks. Learn step-by-step tutorials for linear, quadratic, and exponential models." />
+  <meta name="description" content="Master SAT math regressions with Desmos. Linear, quadratic, exponential models with pacing analytics." />
   <meta property="og:title" content="SAT Regression Trainer" />
-  <meta property="og:description" content="Desmos Regressions Trainer for the SAT. 15 categories, explanations, and solved examples. Ad-free, login-free." />
 
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-KZ21GJFQBD"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-KZ21GJFQBD');
-  </script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-KZ21GJFQBD');</script>
 
-  <script type="text/javascript" id="MathJax-script" async
-    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
   <script src="https://www.desmos.com/api/v1.11/calculator.js?apiKey=4435f284d2154cf48e80abbbffc842cd"></script>
-
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<!-- Pacing Bar -->
 <div id="pacing-bar-container"><div id="pacing-bar"></div></div>
 
 <!-- Top Bar -->
@@ -33,17 +24,17 @@
     <button class="btn btn-icon" id="sidebar-toggle" title="Toggle Sidebar">☰</button>
     <span id="app-title">SAT Regression Trainer</span>
   </div>
-
   <div id="top-bar-center">
     <span id="correct-counter">✅ 0 correct</span>
     <div id="stopwatch">00:00</div>
   </div>
-
   <div id="top-bar-actions">
     <button class="btn btn-primary" id="new-question">New (Shift+Enter)</button>
     <button class="btn" id="start-test">Start Test</button>
     <button class="btn btn-danger" id="end-test">End Test</button>
-    <button class="btn btn-icon" id="theme-toggle" title="Toggle Dark/Light Mode (Ctrl+D)">☀️</button>
+    <button class="btn btn-icon" id="stats-btn" title="Analytics">📊</button>
+    <button class="btn btn-icon" id="mute-btn" title="Toggle Sound">🔔</button>
+    <button class="btn btn-icon" id="theme-toggle" title="Toggle Theme (Ctrl+D)">☀️</button>
     <button class="btn btn-icon" id="help-btn" title="Help">?</button>
   </div>
 </div>
@@ -55,7 +46,6 @@
   <div id="sidebar">
     <div id="sidebar-inner">
 
-      <!-- Categories -->
       <div>
         <h3>Categories</h3>
         <div id="category-selection"></div>
@@ -65,17 +55,22 @@
         </div>
       </div>
 
-      <!-- Tips -->
+      <div>
+        <h3>Flagged</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn" id="review-flagged-btn" style="font-size:0.75rem;padding:4px 10px;">🚩 Review Flagged (0)</button>
+          <button class="btn btn-danger" id="clear-flagged" style="font-size:0.75rem;padding:4px 10px;">Clear</button>
+        </div>
+      </div>
+
       <div>
         <h3>Tips & Method</h3>
         <ul id="tips-list"><li>Load a question to see tips.</li></ul>
       </div>
 
-      <!-- Session History -->
       <div>
         <h3 style="display:flex;justify-content:space-between;align-items:center;">
-          History
-          <button class="btn" id="clear-history" style="font-size:0.7rem;padding:2px 8px;">Clear</button>
+          History <button class="btn" id="clear-history" style="font-size:0.7rem;padding:2px 8px;">Clear</button>
         </h3>
         <div id="history-list"></div>
       </div>
@@ -86,12 +81,17 @@
   <!-- Split Pane -->
   <div id="split-pane">
 
-    <!-- Left Panel -->
     <div id="left-panel">
 
       <!-- Question Card -->
       <div class="card">
-        <div id="current-category-title">—</div>
+        <div id="question-header">
+          <div id="current-category-title">—</div>
+          <div id="question-actions">
+            <button class="btn btn-icon" id="crossout-btn" title="Cross-out mode (C)">✂</button>
+            <button class="btn btn-icon" id="flag-btn" title="Flag question (F)">⚑</button>
+          </div>
+        </div>
         <div id="question-box">Select categories and click <strong>New</strong> to start!</div>
         <div id="pacing-summary"></div>
       </div>
@@ -102,6 +102,7 @@
           <input type="text" id="answer-box" placeholder="Enter your answer (or fraction)" autocomplete="off" />
           <button class="btn btn-primary" id="check-answer">Check</button>
         </div>
+        <div id="answer-preview" class="answer-preview"></div>
         <div id="attempt-dots"></div>
         <div id="result"></div>
         <div id="hint-text"></div>
@@ -114,10 +115,8 @@
 
     </div>
 
-    <!-- Resizer -->
     <div id="resizer"></div>
 
-    <!-- Right Panel (Desmos) -->
     <div id="right-panel">
       <div id="calculator"></div>
     </div>
@@ -126,27 +125,41 @@
 </div>
 
 <!-- Explanation Modal -->
-<div id="explanation-modal">
+<div id="explanation-modal" class="modal-overlay">
   <span class="close-btn" id="close-modal">&times;</span>
   <img id="explanation-modal-content" alt="Solved example" />
+</div>
+
+<!-- Analytics Modal -->
+<div id="analytics-modal" class="modal-overlay">
+  <div class="modal-box" style="min-width:320px;width:700px;">
+    <button class="btn btn-icon" id="close-analytics" style="position:absolute;top:12px;right:12px;">✕</button>
+    <h3>📊 Performance Analytics</h3>
+    <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">
+      Green = Fast &amp; Accurate &nbsp;|&nbsp; Blue = Accurate but Slow &nbsp;|&nbsp; Yellow = Needs Practice &nbsp;|&nbsp; Red = Struggling
+    </p>
+    <div id="analytics-grid"></div>
+  </div>
 </div>
 
 <!-- Help Popup -->
 <div id="help-popup">
   <h4>Info / Help</h4>
-  <p><strong>Shortcuts:</strong></p>
+  <p><strong>Shortcuts</strong></p>
   <p>Enter → Check answer</p>
-  <p>Shift+Enter → Check & next question (if correct)</p>
+  <p>Shift+Enter → Next question (if correct)</p>
   <p>Alt+Enter → Start Test</p>
   <p>Ctrl+D → Toggle Dark Mode</p>
+  <p>F → Flag question</p>
+  <p>C → Toggle Cross-out mode</p>
   <hr style="border-color:var(--border);margin:8px 0;" />
-  <p>The <strong>pacing bar</strong> at the top turns red when you exceed the "Perfect Time" for that category.</p>
-  <p>After 3 wrong attempts, the Desmos solution button appears.</p>
+  <p>Click any <u style="text-decoration-style:dotted">number</u> in the question to copy it to clipboard.</p>
+  <p>The pacing bar turns red after the "Perfect Time" for that category.</p>
   <hr style="border-color:var(--border);margin:8px 0;" />
   <p><a href="https://www.desmos.com/graphingshortcuts" target="_blank" rel="noopener">Desmos shortcuts</a></p>
   <p><a href="https://github.com/Sceptrell/DesmosRegressionTrainer" target="_blank" rel="noopener">GitHub Repo</a></p>
   <p>Email: desmosspeedtrainer@gmail.com</p>
-  <p style="margin-top:6px;color:var(--text-muted)">Credit: AdiarMath, LearnSATMath, and everyone who provided feedback!</p>
+  <p style="margin-top:6px;color:var(--text-muted)">Credit: AdiarMath, LearnSATMath &amp; contributors</p>
 </div>
 
 <script src="questions.js"></script>
