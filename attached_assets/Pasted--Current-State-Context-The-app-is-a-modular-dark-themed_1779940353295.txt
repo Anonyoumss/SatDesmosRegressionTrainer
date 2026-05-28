@@ -1,0 +1,44 @@
+
+Current State Context
+The app is a modular, dark-themed SAT trainer with a pacing engine and analytics. This is the final phase focusing on study resources and session reporting.
+
+---
+
+Stage 1: The "Desmos Cheat Sheet" Drawer
+Users often forget the specific regression formulas.
+1.  Reference Drawer: Add a "Cheat Sheet" button (shortcut H). This opens a searchable side-panel.
+2.  The Content: Populate it with the 10 most critical SAT Desmos formulas (e.g., Circle, Vertex Form, System of Equations, Exponential Growth). 
+3.  One-Click Copy: Each formula in the sheet should have a "Copy to Calculator" button that instantly pastes it into the first empty expression in Desmos.
+
+---
+
+Stage 2: "Study Pack" Export (Flagged Questions)
+Allow users to take their mistakes offline.
+1.  PDF/Text Generator: Add an "Export Study Pack" button in the Flagged Questions section.
+2.  The Export: It should generate a clean, printable HTML view (opened in a new tab) containing all flagged questions, their LaTeX math, and the "Tips & Tricks" for each. 
+3.  Privacy: Ensure this is all done client-side (no data leaves the browser).
+
+---
+
+Stage 3: Test Mode "Report Card"
+Upgrade the Alt+Enter (Test Mode) experience.
+1.  The Summary Screen: When a "Test" ends, instead of a simple alert, show a full-screen Report Card Modal.
+2.  The Stats:
+       Pacing Grade:* A letter grade (A-F) based on how much "Perfect Time" they saved.
+       Weakest Category:* The category where they spent the most time or had the most fails.
+       Strength Category:* Their fastest category.
+3.  Action Plan: A generated sentence like: "Focus on Circle Regressions; you are 20s slower than the target pace."
+
+---
+
+Stage 4: Final Hardening & Mobile Polish
+1.  Mobile/Tablet Adjustments: 
+    *   On screens smaller than 800px, stack the panels vertically (Question on top, Desmos on bottom).
+    *   Ensure the "Click-to-Copy" tooltips don't get cut off on mobile.
+2.  "First Visit" Tutorial: If localStorage is empty, show a very brief 3-step overlay: "1. Select categories. 2. Solve in Desmos. 3. Beat the Perfect Time."
+
+---
+
+Stage 5: Production Cleanup
+1.  Optimization: Minify the final CSS/JS logic where possible (within the vanilla structure).
+2.  SEO & Metadata: Update the <title> and <meta> tags to be more descriptive (e.g., "SAT Desmos Trainer - Paced Practice Engine").
