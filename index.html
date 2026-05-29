@@ -103,16 +103,16 @@
     </div>
   </div>
 
-  <div id="explanation-modal">
-    <div class="modal-content">
-      <button class="close-modal" id="close-modal">&times;</button>
+  <div id="explanation-modal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="close-btn" id="close-modal">&times;</button>
       <img id="explanation-modal-content" src="" alt="Solved Example">
     </div>
   </div>
 
-  <div id="help-modal">
-    <div class="modal-content">
-      <button class="close-modal" id="close-help">&times;</button>
+  <div id="help-modal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="close-btn" id="close-help">&times;</button>
       <h2>SAT Desmos Trainer — Nebula Pacing Engine</h2>
       <p><strong>🎯 Practice Mode:</strong> Questions are procedurally generated. Use Desmos to solve regressions.</p>
       <p><strong>📊 Test Mode:</strong> Simulate Digital SAT timing with Perfect Time pacing engine.</p>
@@ -125,24 +125,38 @@
     </div>
   </div>
 
-  <div id="analytics-modal">
-    <div class="modal-content">
-      <button class="close-modal" id="close-analytics">&times;</button>
+  <div id="analytics-modal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="close-btn" id="close-analytics">&times;</button>
       <h2>Performance Analytics</h2>
-      <canvas id="analytics-canvas" width="600" height="400"></canvas>
+      <div id="analytics-grid"></div>
       <div id="analytics-summary"></div>
     </div>
   </div>
 
+  <div id="report-modal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="close-btn" id="close-report">&times;</button>
+      <h2>Test Report Card</h2>
+      <div style="text-align:center;margin-bottom:20px;">
+        <div id="rc-grade" style="font-size:3rem;font-weight:bold;margin-bottom:8px;">A</div>
+        <div id="rc-label" style="font-size:1.2rem;margin-bottom:16px;">Perfect — Fast & Accurate!</div>
+      </div>
+      <div id="rc-stats"></div>
+      <div id="rc-action" style="margin-top:20px;padding:12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent-violet);"></div>
+    </div>
+  </div>
+
   <div id="cheat-drawer">
-    <button class="close-modal" id="close-cheat">&times;</button>
-    <h3>Cheat Sheet</h3>
+    <button class="close-btn" id="close-cheat">&times;</button>
+    <h3 style="padding:14px 16px;">Cheat Sheet</h3>
     <input type="text" id="cheat-search" placeholder="Search formulas...">
     <div id="cheat-list"></div>
   </div>
 
-  <div id="tutorial-overlay" style="display: block;">
-    <div class="modal-content">
+  <div id="tutorial-overlay" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <button class="close-btn" id="tutorial-close">&times;</button>
       <h2>👋 Welcome to SAT Desmos Trainer!</h2>
       <p><strong>🎯 Getting Started:</strong></p>
       <ul>
@@ -159,7 +173,6 @@
         <li>Use 'C' to cross out answers.</li>
         <li>Access cheat sheets and analytics from the sidebar.</li>
       </ul>
-      <button class="btn btn-primary" id="tutorial-close">Got it!</button>
     </div>
   </div>
 
