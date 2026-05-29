@@ -6,13 +6,13 @@ const calculator = Desmos.GraphingCalculator(elt, { keypad: true, expressions: t
 const CHEAT_SHEET = [
     { title: 'Circle (Standard)', latex: '(x-h)^{2}+(y-k)^{2}=r^{2}' },
     { title: 'Circle (Expanded)', latex: 'x^{2}+y^{2}+ax+by+c=0' },
-    { title: 'Vertex Form (Parabola)', latex: 'y=a(x-h)^{2}+k' },
-    { title: 'Quadratic Standard', latex: 'y=ax^{2}+bx+c' },
+    { title: 'Vertex Form', latex: 'y=a(x-h)^{2}+k' },
+    { title: 'Quadratic', latex: 'y=ax^{2}+bx+c' },
     { title: 'Linear Regression', latex: 'y_{1}\\sim mx_{1}+b' },
     { title: 'Quadratic Regression', latex: 'y_{1}\\sim ax_{1}^{2}+bx_{1}+c' },
     { title: 'Exponential Regression', latex: 'y_{1}\\sim ab^{x_{1}}' },
-    { title: 'Exponential Growth/Decay', latex: 'y=a\\cdot b^{x}' },
-    { title: 'System of Equations', latex: 'y=mx+b' },
+    { title: 'Exponential Growth', latex: 'y=a\\cdot b^{x}' },
+    { title: 'System', latex: 'y=mx+b' },
     { title: 'Power Regression', latex: 'y_{1}\\sim ax_{1}^{b}' },
 ];
 
@@ -28,17 +28,27 @@ const state = {
     resizerPct: 48, flaggedQuestions: [], reviewingFlagged: false,
     hardMode: false, focusMode: false,
     streak: 0, mcMode: true, mcChoices: [],
+    selectedCategories: null,
 };
 
-// ===== Web Audio =====
+// ===== Audio =====
 function playSound(type) {
     if (state.muted) return;
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator(), gain = ctx.createGain();
         osc.connect(gain); gain.connect(ctx.destination);
-        if (type === 'correct') { osc.frequency.value = 880; osc.type = 'sine'; gain.gain.setValueAtTime(0.18, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35); osc.start(); osc.stop(ctx.currentTime + 0.35); }
-        else { osc.frequency.value = 160; osc.type = 'sawtooth'; gain.gain.setValueAtTime(0.12, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4); osc.start(); osc.stop(ctx.currentTime + 0.4); }
+        if (type === 'correct') {
+            osc.frequency.value = 880; osc.type = 'sine';
+            gain.gain.setValueAtTime(0.18, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+            osc.start(); osc.stop(ctx.currentTime + 0.35);
+        } else {
+            osc.frequency.value = 160; osc.type = 'sawtooth';
+            gain.gain.setValueAtTime(0.12, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.start(); osc.stop(ctx.currentTime + 0.4);
+        }
     } catch(e) {}
 }
 
@@ -99,7 +109,7 @@ function toggleHardMode() { state.hardMode = !state.hardMode; applyHardMode(); s
 
 // ===== Streak =====
 function updateStreak(increment) {
-    if (increment) { state.streak++; } else { state.streak = 0; }
+    if (increment) state.streak++; else state.streak = 0;
     const el = document.getElementById('streak-counter');
     if (!el) return;
     el.textContent = `🔥 ${state.streak}`;
@@ -143,23 +153,18 @@ function showPacingSummary(t) {
     el.textContent = diff >= 0 ? `⏱ ${t}s (Perfect: ${state.currentQuestion.perfectTime}s) — Saved ${diff}s!` : `⏱ ${t}s (Perfect: ${state.currentQuestion.perfectTime}s) — ${Math.abs(diff)}s over.`;
 }
 
-// ===== Smart Distractors =====
+// ===== Distractors =====
 function generateDistractors(answer) {
     const val = parseValue(answer);
     const str = String(answer).trim();
     const isFrac = str.includes('/');
     const isInt = !isFrac && Number.isInteger(val);
     const decPlaces = (!isFrac && !isInt) ? Math.max(1, (str.split('.')[1] || '').length) : 0;
-
     const fmt = (n) => {
-        if (isFrac) {
-            const denom = parseInt(str.split('/')[1]) || 1;
-            return `${Math.round(n * denom)}/${denom}`;
-        }
+        if (isFrac) { const d = parseInt(str.split('/')[1]) || 1; return `${Math.round(n*d)}/${d}`; }
         if (isInt) return String(Math.round(n));
         return n.toFixed(decPlaces);
     };
-
     const step = isInt ? 1 : Math.pow(10, -decPlaces);
     const deltas = [1, -1, 2, -2, 3, -3, 4, -4, 5, -5];
     const seen = new Set([fmt(val)]);
@@ -169,7 +174,6 @@ function generateDistractors(answer) {
         const cand = fmt(val + d * step);
         if (!seen.has(cand)) { seen.add(cand); distractors.push(cand); }
     }
-
     const choices = [str, ...distractors];
     for (let i = choices.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -178,7 +182,7 @@ function generateDistractors(answer) {
     return choices;
 }
 
-// ===== Multiple Choice UI =====
+// ===== MC UI =====
 const MC_LABELS = ['A', 'B', 'C', 'D'];
 function renderMCChoices(choices) {
     state.mcChoices = choices;
@@ -194,7 +198,6 @@ function renderMCChoices(choices) {
             const btn = document.createElement('button');
             btn.className = 'mc-btn';
             btn.dataset.value = choice;
-            btn.dataset.index = i;
             btn.innerHTML = `<span class="mc-label">${MC_LABELS[i]}</span><span class="mc-val">\\(${choice}\\)</span>`;
             btn.addEventListener('click', () => handleMCAnswer(choice, btn));
             grid.appendChild(btn);
@@ -213,39 +216,29 @@ function handleMCAnswer(choice, btnEl) {
     const cv = parseValue(state.currentQuestion.answer);
     const uv = parseValue(choice);
     const isCorrect = Math.abs(uv - cv) < 1e-9;
-
     if (isCorrect) {
         btnEl.classList.add('mc-correct');
-        document.querySelectorAll('.mc-btn').forEach(b => {
-            b.disabled = true;
-            if (b !== btnEl) {
-                b.classList.add('mc-incorrect');
-            }
-        });
+        document.querySelectorAll('.mc-btn').forEach(b => b.disabled = true);
         const t = Math.round((Date.now() - state.currentQuestion.startTime) / 1000);
         stopPacingBar(); document.getElementById('pacing-bar').style.width = '100%';
         setResult('✅ Correct!', true); playSound('correct');
         updateStreak(true);
         state.sessionStats.totalCorrect++;
-        document.getElementById('correct-counter').textContent = `✅ ${state.sessionStats.totalCorrect} correct`;
+        document.getElementById('correct-counter').textContent = `✅ ${state.sessionStats.totalCorrect}`;
         addToHistory(state.currentQuestion.id, state.currentQuestion.category.title, t, state.currentQuestion.tries + 1, state.currentQuestion.perfectTime);
         showPacingSummary(t); state.currentQuestion.answer = null;
-        // trigger next if test mode
         if (state.testMode) {
             state.currentQuestionNum++;
             setTimeout(() => { state.currentQuestionNum >= state.testCount ? endTest(true) : newQuestion(); }, 800);
         }
     } else {
-        btnEl.classList.add('mc-wrong');
-        btnEl.disabled = true;
+        btnEl.classList.add('mc-wrong'); btnEl.disabled = true;
         state.currentQuestion.tries++;
-        renderAttemptDots();
-        updateStreak(false);
+        renderAttemptDots(); updateStreak(false);
         if (state.currentQuestion.tries === 1) { setResult('❌ Incorrect. Try again!', false); document.getElementById('give-up-btn').style.display = 'inline-block'; }
         else if (state.currentQuestion.tries === 2) { setResult('❌ Still incorrect. One more try.', false); const ht2 = document.getElementById('hint-text'); ht2.textContent = 'Check the sidebar tips for a hint.'; ht2.style.display = 'block'; }
         else {
             playSound('wrong');
-            // reveal correct
             document.querySelectorAll('.mc-btn').forEach(b => {
                 b.disabled = true;
                 if (Math.abs(parseValue(b.dataset.value) - cv) < 1e-9) b.classList.add('mc-correct');
@@ -258,20 +251,18 @@ function handleMCAnswer(choice, btnEl) {
     }
 }
 
-// ===== MC Mode Toggle =====
 function applyMCMode() {
     const toggle = document.getElementById('mc-mode-toggle');
     if (toggle) { toggle.classList.toggle('active', state.mcMode); toggle.textContent = state.mcMode ? '🔢 MC: ON' : '🔢 MC: OFF'; }
 }
 function toggleMCMode() { state.mcMode = !state.mcMode; applyMCMode(); saveStorage(); newQuestion(); }
 
-// ===== Click-to-Copy =====
+// ===== Copy =====
 function wrapCopyableNumbers(html) {
     const parts = html.split(/(\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\))/g);
     return parts.map((part, i) => {
         if (i % 2 === 1) return part;
-        return part.replace(/(?<![a-zA-Z#\-])(-?\b\d+(?:\.\d+)?\b)(?![a-zA-Z%])/g, m =>
-            `<span class="copyable-num" title="Click to copy">${m}</span>`);
+        return part.replace(/(?<![a-zA-Z#\-])(-?\b\d+(?:\.\d+)?\b)(?![a-zA-Z%])/g, m => `<span class="copyable-num" title="Click to copy">${m}</span>`);
     }).join('');
 }
 
@@ -294,7 +285,7 @@ function renderHistory() {
     }).join('');
 }
 
-// ===== Attempt Dots =====
+// ===== Dots =====
 function renderAttemptDots() {
     document.getElementById('attempt-dots').innerHTML = [0,1,2].map(i =>
         `<div class="attempt-dot${i < state.currentQuestion.tries ? ' used' : ''}"></div>`).join('');
@@ -336,17 +327,17 @@ function toggleFlag() {
     updateReviewBtn(); saveStorage();
 }
 
-// ===== Export Study Pack =====
+// ===== Export =====
 function exportStudyPack() {
     if (!state.flaggedQuestions.length) { alert('No flagged questions to export!'); return; }
     const rows = state.flaggedQuestions.map((q, i) => `
         <div class="q-block">
-            <div class="q-num">Question ${i+1} — ${q.title || 'Unknown Category'}</div>
+            <div class="q-num">Question ${i+1} — ${q.title || 'Unknown'}</div>
             <div class="q-text">${q.rawText}</div>
             ${q.tips?.length ? `<div class="q-tips"><strong>Tips:</strong><ul>${q.tips.map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
         </div>`).join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SAT Study Pack</title>
-    <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>
     <style>body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#222}
     h1{color:#7c4dff;margin-bottom:4px}p.sub{color:#666;font-size:0.85rem;margin-bottom:32px}
     .q-block{border:1px solid #ddd;border-radius:8px;padding:16px 20px;margin-bottom:20px;page-break-inside:avoid}
@@ -354,13 +345,13 @@ function exportStudyPack() {
     .q-text{font-size:1.05rem;line-height:1.6;white-space:pre-wrap;margin-bottom:10px}
     .q-tips{font-size:0.85rem;color:#555}ul{margin:4px 0 0 16px}li{margin-bottom:3px}
     @media print{body{margin:20px}}</style></head><body>
-    <h1>SAT Desmos Study Pack</h1><p class="sub">Exported ${new Date().toLocaleDateString()} • ${state.flaggedQuestions.length} flagged question(s)</p>
+    <h1>SAT Desmos Study Pack</h1><p class="sub">Exported ${new Date().toLocaleDateString()} • ${state.flaggedQuestions.length} flagged</p>
     ${rows}</body></html>`;
     const win = window.open('', '_blank');
     win.document.write(html); win.document.close();
 }
 
-// ===== Category Checkboxes =====
+// ===== Categories =====
 function populateCategoryCheckboxes() {
     const container = document.getElementById('category-selection');
     const saved = state.selectedCategories;
@@ -369,6 +360,16 @@ function populateCategoryCheckboxes() {
             <input type="checkbox" id="cat-${cat.id}" value="${cat.id}" ${(!saved || saved.includes(cat.id)) ? 'checked' : ''}>
             <label for="cat-${cat.id}">${cat.title}</label>
         </div>`).join('');
+}
+
+// ===== Difficulty Badge =====
+function getDifficultyColor(diff) {
+    const map = { easy: 'var(--green)', medium: 'var(--orange)', hard: 'var(--neon-red)' };
+    return map[diff] || 'var(--text-muted)';
+}
+function getDifficultyLabel(diff) {
+    const map = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+    return map[diff] || diff;
 }
 
 // ===== New Question =====
@@ -390,21 +391,19 @@ function newQuestion(fromFlagged = false) {
         const gen = category.questionGenerator();
         questionText = gen.questionText; answer = gen.answer;
     }
-
-    // Hard mode: reduce perfect time by 20%
     const effectivePerfectTime = state.hardMode ? Math.round((category.perfectTime || 90) * 0.8) : (category.perfectTime || 90);
-
     calculator.setBlank();
     state.crossOutMode = false;
     document.getElementById('crossout-btn').classList.remove('active');
     document.getElementById('question-box').classList.remove('crossout-mode');
-
     state.currentQuestion = { id: category.id, startTime: Date.now(), tries: 0, perfectTime: effectivePerfectTime, answer, category, flagged: false, rawText: questionText };
-
-    document.getElementById('current-category-title').textContent = category.title + (state.hardMode ? ' 🔥' : '');
+    document.getElementById('current-category-title').textContent = category.title;
+    const badge = document.getElementById('current-difficulty-badge');
+    badge.textContent = getDifficultyLabel(category.difficulty);
+    badge.style.background = getDifficultyColor(category.difficulty);
+    badge.style.color = category.difficulty === 'easy' ? '#0a0b10' : '#fff';
     document.getElementById('flag-btn').textContent = '⚑';
     document.getElementById('flag-btn').classList.remove('flagged');
-
     const qBox = document.getElementById('question-box');
     qBox.style.whiteSpace = category.id === 'Two points Non-linear' ? 'normal' : 'pre-wrap';
     qBox.innerHTML = wrapCopyableNumbers(wrapWordsForCrossOut(questionText));
@@ -412,8 +411,7 @@ function newQuestion(fromFlagged = false) {
     qBox.querySelectorAll('.copyable-num').forEach(span => {
         span.addEventListener('click', e => { e.stopPropagation(); navigator.clipboard.writeText(span.textContent).catch(() => {}); showCopyTooltip(span); });
     });
-
-    // Full state reset
+    // Reset
     const answerBox = document.getElementById('answer-box');
     answerBox.value = ''; answerBox.className = '';
     const result = document.getElementById('result'); result.textContent = ''; result.className = '';
@@ -423,12 +421,10 @@ function newQuestion(fromFlagged = false) {
     document.getElementById('show-desmos-btn').style.display = 'none';
     const prev = document.getElementById('answer-preview'); prev.innerHTML = ''; prev.className = 'answer-preview';
     document.getElementById('attempt-dots').innerHTML = '';
-
     document.getElementById('tips-list').innerHTML = category.tips.map(t => `<li>${t}</li>`).join('');
+    const hasImage = !!category.explanationImage;
     document.getElementById('show-explanation').dataset.imageSrc = category.explanationImage || '';
-    // Hard mode: hide solution button
-    document.getElementById('show-explanation').style.display = state.hardMode ? 'none' : '';
-
+    document.getElementById('show-explanation').style.display = (state.hardMode || !hasImage) ? 'none' : '';
     renderAttemptDots();
     renderMCChoices(generateDistractors(answer));
     startPacingBar();
@@ -442,7 +438,7 @@ function showCopyTooltip(el) {
     el.appendChild(tip); setTimeout(() => tip.remove(), 1200);
 }
 
-// ===== Answer Checking (text mode) =====
+// ===== Parse =====
 function parseValue(str) {
     if (typeof str === 'number') return str;
     const s = String(str).trim();
@@ -450,20 +446,21 @@ function parseValue(str) {
     const n = parseFloat(s); return isNaN(n) ? NaN : n;
 }
 
+// ===== Check =====
 function handleCheckAnswer() {
     if (state.currentQuestion.answer === null) return false;
     const box = document.getElementById('answer-box');
     const input = box.value.trim();
-    if (!input) { setResult('❌ Please enter an answer.', false); return false; }
+    if (!input) { setResult('❌ Enter an answer.', false); return false; }
     const uv = parseValue(input), cv = parseValue(state.currentQuestion.answer);
-    if (isNaN(uv) || isNaN(cv)) { setResult('❌ Invalid format. Enter a number or fraction.', false); return false; }
+    if (isNaN(uv) || isNaN(cv)) { setResult('❌ Invalid format.', false); return false; }
     if (Math.abs(uv - cv) < 1e-9) {
         const t = Math.round((Date.now() - state.currentQuestion.startTime) / 1000);
         stopPacingBar(); document.getElementById('pacing-bar').style.width = '100%';
         box.classList.add('correct'); setResult('✅ Correct!', true); playSound('correct');
         updateStreak(true);
         state.sessionStats.totalCorrect++;
-        document.getElementById('correct-counter').textContent = `✅ ${state.sessionStats.totalCorrect} correct`;
+        document.getElementById('correct-counter').textContent = `✅ ${state.sessionStats.totalCorrect}`;
         addToHistory(state.currentQuestion.id, state.currentQuestion.category.title, t, state.currentQuestion.tries + 1, state.currentQuestion.perfectTime);
         showPacingSummary(t); state.currentQuestion.answer = null;
         return true;
@@ -494,7 +491,7 @@ function giveUp() {
     state.currentQuestion.answer = null;
 }
 
-// ===== Live Answer Preview =====
+// ===== Preview =====
 let previewTimer = null;
 function updateAnswerPreview(val) {
     clearTimeout(previewTimer);
@@ -568,7 +565,19 @@ function showCheatSheet(open = true) {
     if (open) { document.getElementById('cheat-search').value = ''; renderCheatSheet(); document.getElementById('cheat-search').focus(); }
 }
 
-// ===== Test Report Card =====
+// ===== Desmos Solution =====
+function showDesmosSolution() {
+    if (state.hardMode) return;
+    const exprs = state.currentQuestion.category?.desmosExpressions;
+    calculator.setBlank();
+    if (Array.isArray(exprs) && exprs.length) {
+        exprs.forEach((latex, i) => calculator.setExpression({ id: `sol-${i}`, latex, color: '#7c4dff' }));
+    } else {
+        calculator.setExpression({ id: 'sol-fallback', latex: 'y=x' });
+    }
+}
+
+// ===== Report Card =====
 function calcTestGrade(answered, correct, totalTime, totalPerfect, giveUps) {
     const acc = answered ? correct / answered : 0;
     if (acc === 1 && totalTime < totalPerfect) return { grade: 'A', color: 'var(--accent-cyan)', label: 'Perfect — Fast & Accurate!' };
@@ -593,7 +602,7 @@ function showReportCard(answered, correct, totalTime, totalPerfect) {
         if (!weakest || ratio > weakest.ratio) weakest = { ...s, ratio };
         if (!strongest || ratio < strongest.ratio) strongest = { ...s, ratio };
     });
-    const actionPlan = weakest && weakest.ratio > 1.05 ? `Focus on <strong>${weakest.title}</strong> — you're ${Math.round((weakest.ratio - 1) * (weakest.perfSum / weakest.total))}s slower than target pace.` : answered ? 'Great pacing overall! Keep it up.' : '';
+    const actionPlan = weakest && weakest.ratio > 1.05 ? `Focus on <strong>${weakest.title}</strong> — you're ${Math.round((weakest.ratio - 1) * (weakest.perfSum / weakest.total))}s slower than target.` : answered ? 'Great pacing overall! Keep it up.' : '';
     document.getElementById('rc-grade').textContent = grade;
     document.getElementById('rc-grade').style.color = color;
     document.getElementById('rc-label').textContent = label;
@@ -610,17 +619,17 @@ function showReportCard(answered, correct, totalTime, totalPerfect) {
     document.getElementById('report-modal').classList.add('open');
 }
 
-// ===== Flagged Review =====
+// ===== Review =====
 function updateReviewBtn() {
     const btn = document.getElementById('review-flagged-btn');
     if (state.reviewingFlagged) { btn.textContent = '✖ Exit Review'; btn.classList.add('active'); }
-    else { btn.textContent = `🚩 Review Flagged (${state.flaggedQuestions.length})`; btn.classList.remove('active'); }
+    else { btn.textContent = `🚩 Review (${state.flaggedQuestions.length})`; btn.classList.remove('active'); }
 }
 function toggleReviewFlagged() { state.reviewingFlagged = !state.reviewingFlagged; updateReviewBtn(); if (state.reviewingFlagged) newQuestion(true); }
 
-// ===== Test Mode =====
+// ===== Test =====
 function startTest() {
-    const n = parseInt(prompt('How many questions for the test?'));
+    const n = parseInt(prompt('How many questions?'));
     if (!n || n <= 0) return;
     const checked = document.querySelectorAll('#category-selection input:checked');
     if (!checked.length) { alert('Please select at least one category!'); return; }
@@ -643,41 +652,21 @@ function endTest(finished = false) {
 // ===== Sidebar =====
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
 
-// ===== Explanation Modal =====
-function showExampleSolution() {
+// ===== Explanation =====
+function showExplanation() {
     if (state.hardMode) return;
     const src = document.getElementById('show-explanation').dataset.imageSrc;
     if (!src) { alert('Load a question first.'); return; }
     document.getElementById('explanation-modal-content').src = src;
     document.getElementById('explanation-modal').classList.add('open');
 }
-
-function handleShowDesmosSolution() {
-    if (state.hardMode) return;
-    if (!state.currentQuestion.category || !state.currentQuestion.category.desmosExpressions) {
-        alert('No Desmos solution available for this question.');
-        return;
-    }
-    
-    // Clear existing expressions first
-    calculator.setBlank();
-    
-    // Inject the solution expressions
-    state.currentQuestion.category.desmosExpressions.forEach((latex, index) => {
-        calculator.setExpression({ 
-            id: 'sol-' + index, 
-            latex: latex, 
-            color: '#7c4dff' 
-        });
-    });
-}
 function closeExplanation() { document.getElementById('explanation-modal').classList.remove('open'); }
 
-// ===== Help Modal =====
+// ===== Help =====
 function openHelp() { document.getElementById('help-modal').classList.add('open'); }
 function closeHelp() { document.getElementById('help-modal').classList.remove('open'); }
 
-// ===== Resizer (with Desmos sync) =====
+// ===== Resizer =====
 function setupResizer() {
     const resizer = document.getElementById('resizer'), left = document.getElementById('left-panel');
     let dragging = false;
@@ -688,16 +677,63 @@ function setupResizer() {
         const rect = document.getElementById('split-pane').getBoundingClientRect();
         const pct = Math.max(25, Math.min(70, ((e.clientX - rect.left) / (rect.width - 5)) * 100));
         left.style.width = pct + '%'; state.resizerPct = pct;
-        calculator.resize(); // prevent Desmos viewport glitch
+        calculator.resize();
     });
     document.addEventListener('mouseup', () => { if (dragging) { dragging = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; saveStorage(); } });
 }
 
-// ===== Tutorial =====
-function showTutorial() { document.getElementById('tutorial-overlay').classList.add('open'); }
-function closeTutorial() { document.getElementById('tutorial-overlay').classList.remove('open'); }
+// ===== Spotlight Tour =====
+const TOUR_STEPS = [
+    { el: '#sidebar', title: '1. Pick Your Categories', desc: 'Check the categories you want to practice. Use All/None to select quickly.' },
+    { el: '#question-card', title: '2. Read the Question', desc: 'Click any dotted number to copy it to your clipboard. Use cross-out mode (C) to strike words.' },
+    { el: '#answer-area', title: '3. Choose Your Answer', desc: 'Pick A/B/C/D in Multiple Choice mode, or type directly. Beat the Perfect Time shown on the bar!' },
+    { el: '#right-panel', title: '4. Solve with Desmos', desc: 'Use the full Desmos calculator on the right. Cheat Sheet (H) has formulas you can inject instantly.' },
+    { el: '#top-bar', title: '5. Keyboard Shortcuts', desc: 'Enter=Check, Shift+Enter=Next, Z=Focus, F=Flag, H=Cheat, C=Cross-out, 1-4=MC select, Esc=Close.' },
+];
+let tourStep = 0;
+function startTour() {
+    tourStep = 0;
+    document.getElementById('spotlight-overlay').style.display = 'block';
+    showTourStep();
+}
+function showTourStep() {
+    const step = TOUR_STEPS[tourStep];
+    const target = document.querySelector(step.el);
+    if (!target) { endTour(); return; }
+    const rect = target.getBoundingClientRect();
+    const hole = document.getElementById('spotlight-hole');
+    const pad = 12;
+    hole.style.left = (rect.left - pad) + 'px';
+    hole.style.top = (rect.top - pad) + 'px';
+    hole.style.width = (rect.width + pad * 2) + 'px';
+    hole.style.height = (rect.height + pad * 2) + 'px';
+    document.getElementById('spotlight-title').textContent = step.title;
+    document.getElementById('spotlight-desc').textContent = step.desc;
+    document.getElementById('spotlight-dots').innerHTML = TOUR_STEPS.map((_, i) => `<span class="dot${i === tourStep ? ' active' : ''}"></span>`).join('');
+    document.getElementById('spotlight-next').textContent = tourStep === TOUR_STEPS.length - 1 ? 'Got it!' : 'Next →';
+    // Position tooltip
+    const tooltip = document.getElementById('spotlight-tooltip');
+    const tooltipWidth = 320;
+    let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+    let top = rect.bottom + 20;
+    if (left < 10) left = 10;
+    if (left + tooltipWidth > window.innerWidth - 10) left = window.innerWidth - tooltipWidth - 10;
+    if (top + 160 > window.innerHeight) top = rect.top - 170;
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+}
+function nextTourStep() {
+    tourStep++;
+    if (tourStep >= TOUR_STEPS.length) { endTour(); return; }
+    showTourStep();
+}
+function endTour() {
+    document.getElementById('spotlight-overlay').style.display = 'none';
+    localStorage.setItem('desmosTourDone', '1');
+    newQuestion();
+}
 
-// ===== Keyboard Shortcuts =====
+// ===== Keyboard =====
 document.addEventListener('keydown', e => {
     const inInput = ['answer-box','cheat-search'].includes(e.target.id);
     if (e.target.id === 'answer-box') {
@@ -718,7 +754,8 @@ document.addEventListener('keydown', e => {
     }
     if (e.key === 'Escape') {
         showCheatSheet(false);
-        ['analytics-modal','report-modal','explanation-modal','help-modal','tutorial-overlay'].forEach(id => document.getElementById(id)?.classList.remove('open'));
+        ['analytics-modal','report-modal','explanation-modal','help-modal','spotlight-overlay'].forEach(id => document.getElementById(id)?.classList.remove('open'));
+        document.getElementById('spotlight-overlay').style.display = 'none';
         if (state.focusMode) toggleFocusMode();
     }
 });
@@ -729,7 +766,7 @@ function initEventListeners() {
     document.getElementById('new-question').addEventListener('click', () => newQuestion());
     document.getElementById('start-test').addEventListener('click', startTest);
     document.getElementById('end-test').addEventListener('click', () => { if (confirm('End test?')) endTest(false); });
-    document.getElementById('show-explanation').addEventListener('click', showExampleSolution);
+    document.getElementById('show-explanation').addEventListener('click', showExplanation);
     document.getElementById('close-modal').addEventListener('click', closeExplanation);
     document.getElementById('explanation-modal').addEventListener('click', e => { if (e.target.id === 'explanation-modal') closeExplanation(); });
     document.getElementById('close-analytics').addEventListener('click', closeAnalytics);
@@ -746,7 +783,7 @@ function initEventListeners() {
     document.getElementById('mute-btn').addEventListener('click', toggleMute);
     document.getElementById('sidebar-toggle').addEventListener('click', toggleSidebar);
     document.getElementById('give-up-btn').addEventListener('click', giveUp);
-    document.getElementById('show-desmos-btn').addEventListener('click', handleShowDesmosSolution);
+    document.getElementById('show-desmos-btn').addEventListener('click', showDesmosSolution);
     document.getElementById('clear-history').addEventListener('click', () => { state.sessionStats.history = []; renderHistory(); saveStorage(); });
     document.getElementById('stats-btn').addEventListener('click', openAnalytics);
     document.getElementById('flag-btn').addEventListener('click', toggleFlag);
@@ -758,11 +795,10 @@ function initEventListeners() {
     document.getElementById('cheat-btn').addEventListener('click', () => showCheatSheet(!document.getElementById('cheat-drawer').classList.contains('open')));
     document.getElementById('close-cheat').addEventListener('click', () => showCheatSheet(false));
     document.getElementById('cheat-search').addEventListener('input', e => renderCheatSheet(e.target.value));
-    document.getElementById('tutorial-close').addEventListener('click', closeTutorial);
-    document.getElementById('tutorial-overlay').addEventListener('click', e => { if (e.target.id === 'tutorial-overlay') closeTutorial(); });
     document.getElementById('hard-mode-toggle').addEventListener('click', toggleHardMode);
     document.getElementById('mc-mode-toggle').addEventListener('click', toggleMCMode);
     document.getElementById('focus-exit').addEventListener('click', toggleFocusMode);
+    document.getElementById('spotlight-next').addEventListener('click', nextTourStep);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -770,6 +806,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyTheme(); applyMute(); applyFocusMode(); applyHardMode(); applyMCMode();
     populateCategoryCheckboxes(); renderHistory();
     initEventListeners(); setupResizer(); initCrossOut();
-    updateReviewBtn(); updateStreak(false); newQuestion();
-    if (!returning) showTutorial();
+    updateReviewBtn(); updateStreak(false);
+    if (!returning && !localStorage.getItem('desmosTourDone')) { startTour(); }
+    else { newQuestion(); }
 });
